@@ -88,9 +88,9 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **572개 전부 통과**(`pytest -q`).
+로컬 pytest **651개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
-(`tests/test_adversarial_*.py` 8개 — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증).
+(`tests/test_adversarial_*.py` **12개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 
 ```bash
 PYTHONPATH=src python -m pytest -q     # ko-pii 미설치 시 PII BLOCK 단언은 SKIP
@@ -106,7 +106,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **572 passed** (0 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **651 passed** (0 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
