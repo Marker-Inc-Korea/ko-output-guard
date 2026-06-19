@@ -22,7 +22,11 @@ _PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
     ("anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"), Severity.CRITICAL),
     ("google_api_key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), Severity.CRITICAL),
     ("slack_token", re.compile(r"\bxox[baprse]-[0-9A-Za-z-]{10,}\b"), Severity.CRITICAL),
-    ("stripe_key", re.compile(r"\b[rs]k_(?:live|test)_[0-9A-Za-z]{24,}\b"), Severity.CRITICAL),
+    # R4: stripe live/test secret/restricted 키에 더해 webhook signing secret(whsec_)도
+    # 잡는다. 기존 [rs]k_(live|test) 대안은 *그대로 유지*하고 whsec_ 만 추가(축소 금지).
+    ("stripe_key",
+     re.compile(r"\b(?:[rs]k_(?:live|test)_[0-9A-Za-z]{24,}|whsec_[0-9A-Za-z]{24,})\b"),
+     Severity.CRITICAL),
     ("private_key_block",
      re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA |ENCRYPTED )?PRIVATE KEY-----",
                 re.IGNORECASE),
@@ -35,7 +39,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
     ("bearer_token", re.compile(r"\bBearer\s+([A-Za-z0-9_\-.=]{20,})", re.IGNORECASE),
      Severity.HIGH),
     # 범용 'api_key = "..."' 류 — 오탐 여지(설명용 placeholder)라 MEDIUM.
-    # 보강: var-keyword 를 확장 — 단어 경계 단일 키워드 외에 *접미사형* 식별자
+    # R2: var-keyword 를 확장 — 단어 경계 단일 키워드 외에 *접미사형* 식별자
     # (BARE *_KEY/_TOKEN/_SECRET, 예: ALGOLIA_ADMIN_KEY) 와 X-Auth-Key 헤더도 포함한다.
     # 접미사형은 식별자 1+ 글자 뒤 _key/_token/_secret 로 끝나야 하므로(=구분자 필수)
     # 'monkey'/'broken' 같은 prose 단어는 매칭되지 않는다. 모두 [:=] 할당 필수 →
@@ -51,6 +55,17 @@ _PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
     # scheme://user:PASSWORD@host — postgres/mysql/mongodb/redis/amqp 등. group(1)=password.
     ("db_connection_string",
      re.compile(r"(?i)\b[a-z][a-z0-9+.\-]*://[^/\s:@]*:([^/\s:@]{6,})@"), Severity.HIGH),
+    # R4: 위 대안은 password 가 첫 '@'에서 끊겨 '@'를 포함한 비번('P@ssw0rdLong')은
+    # 매칭 자체가 실패한다. 그래서 *마지막 @host* 에 앵커한 별도 대안을 ADD(기존 축소 금지):
+    # password 는 공백/슬래시만 제외(=@ 허용)하고 그 뒤가 @ + '@'없는 host([:/]·공백·끝
+    # 으로 종료)일 때만 잡는다. password greedy 백트래킹은 @경계를 선형 이동할 뿐이라
+    # ReDoS 없음(50K @-반복 1.4ms). redis/mysql/@-free 정상 conn 은 위 대안이 이미 BLOCK.
+    ("db_connection_string",
+     re.compile(r"(?i)\b[a-z][a-z0-9+.\-]*://[^/\s:@]*:([^/\s]{6,})@[^/\s:@]+(?=[:/]|\s|$)"),
+     Severity.HIGH),
+    # R4: Twilio Account SID(AC + 32 hex) — prefix·길이 고정의 고유 형식이라 저-FP.
+    # 동반 auth token 은 bare 32-hex 라 단독으론 약하지만 SID 자체가 강한 신호.
+    ("twilio_account_sid", re.compile(r"\bAC[0-9a-f]{32}\b"), Severity.HIGH),
     ("npm_token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b"), Severity.CRITICAL),
     ("azure_storage_key",
      re.compile(r"AccountKey=([A-Za-z0-9+/]{40,}={0,2})"), Severity.CRITICAL),
@@ -93,7 +108,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
     ("labeled_hex_secret",
      re.compile(r"(?i)(?:encryption|private|credential|master|signing)[_\s]?"
                 r"(?:key|secret|token)[_\s:=]{1,3}([a-f0-9]{32,64})\b"), Severity.HIGH),
-    # 보강: 강한 KO/EN 시크릿 라벨(비밀번호|시크릿|secret|password) + 연속 all-hex(32~64).
+    # R2: 강한 KO/EN 시크릿 라벨(비밀번호|시크릿|secret|password) + 연속 all-hex(32~64).
     # all-hex 는 labeled_secret_blob 의 대/소/숫자 혼합 요건을 통과 못 해 누락됐다. 강한
     # 라벨이 명시적으로 붙어야만 HIGH 로 잡으므로 git-hash/MD5(라벨 없음·'해시:' 등 약한
     # 라벨)는 그대로 SAFE. 라벨과 값 사이는 콜론/등호/공백만 허용(짧은 윈도, 백트래킹 없음).
@@ -102,7 +117,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
      Severity.HIGH),
 ]
 
-# 명백한 placeholder/예시는 generic 오탐에서 제외. .match()(prefix-anchored)는
+# 명백한 placeholder/예시는 generic 오탐에서 제외. OG-3: .match()(prefix-anchored)는
 # 'test'로 *시작하는* 진짜 고-엔트로피 키('test1234abcdEFGH5678realkey')까지 placeholder로
 # 떨궈 누출을 놓친다. 그래서 .fullmatch() 로 *값 전체*가 placeholder 일 때만 제외한다.
 # 단일 토큰뿐 아니라 placeholder 단어들이 구분자로 이어진 *구절*('REPLACE_WITH_YOUR_TOKEN',
@@ -115,7 +130,7 @@ _PLACEHOLDER_WORD = (
 _PLACEHOLDER = re.compile(
     rf"(?i)(?:<.*>|\.\.\.|(?:{_PLACEHOLDER_WORD})(?:[_\-]?(?:{_PLACEHOLDER_WORD}))*[0-9]*)",
 )
-# 값에 'example'이 substring 으로 박혀 있다고 무조건 예시로 보면 진짜 키에 'example'
+# OG-3: 값에 'example'이 substring 으로 박혀 있다고 무조건 예시로 보면 진짜 키에 'example'
 # 만 덧대 우회된다('exampleAKIA…REALKEY'). 그래서 *값 전체*가 예시·placeholder 성분으로만
 # 구성될 때만(fullmatch) 예시로 간주한다.
 _EXAMPLE_VAL = re.compile(
@@ -132,7 +147,7 @@ _VALUE_GUARDED = frozenset({
     "docker_config_auth", "labeled_hex_secret", "labeled_hex_blob",
 })
 
-# 공백 한 칸/제로폭 한 글자만 끼면 raw 텍스트의 모든 credential 패턴이 깨진다
+# OG-2: 공백 한 칸/제로폭 한 글자만 끼면 raw 텍스트의 모든 credential 패턴이 깨진다
 # ('AKIA IOSFODNN7EXAMPLE'). 그래서 공백·제로폭을 걷어낸 *사본*에서도 재스캔하고 원본
 # offset 으로 역매핑한다(pii_leak.py 의 collapse+remap 접근 재사용). prose 의 단어 사이
 # 공백을 지우면 임의 영숫자 덩어리가 생겨 약한 패턴(generic/labeled blob)은 오탐하므로,
@@ -199,7 +214,7 @@ def _scan_secrets_impl(
             # 캡처 그룹(값)이 있는 패턴은 placeholder/예시 값이면 건너뜀(과탐 방지).
             if code in _VALUE_GUARDED and m.groups():
                 val = m.group(1)
-                # fullmatch — 값 *전체*가 placeholder 일 때만 제외(prefix 우회 차단).
+                # OG-3: fullmatch — 값 *전체*가 placeholder 일 때만 제외(prefix 우회 차단).
                 if _PLACEHOLDER.fullmatch(val) or len(set(val)) <= 3:
                     continue
                 if code in ("generic_secret_assignment", "labeled_secret_blob") \
@@ -217,7 +232,7 @@ def _scan_secrets_impl(
             # 광범위 매칭 패턴(틸드 포함 Azure AD)은 저-엔트로피(반복/placeholder)면 건너뜀.
             if code == "azure_ad_secret" and len(set(m.group(0))) <= 6:
                 continue
-            # PEM 헤더 단독('…형식이라고 설명')은 예시 — 헤더와 본문 사이 공백/주석이
+            # PEM 헤더 단독('…형식이라고 설명')은 예시 — OG-7: 헤더와 본문 사이 공백/주석이
             # 200자를 넘으면 본문을 못 봐 누출이 묵살된다. 헤더 자체를 신호로 보되, 본문이
             # 있으면(공백 무관) 확정. 헤더만 있고 본문이 전무하면 예시로 본다.
             if code == "private_key_block":
@@ -230,14 +245,14 @@ def _scan_secrets_impl(
                 if not has_body and _EXAMPLE_CTX.search(
                         text[max(0, m.start() - 24):m.end() + 24]):
                     continue  # 본문 없음 + 예시/형식 맥락 → 설명용 예시
-            # placeholder/예시 필터를 통과한 generic 값이 고-엔트로피(대/소/숫자 혼합,
+            # OG-3: placeholder/예시 필터를 통과한 generic 값이 고-엔트로피(대/소/숫자 혼합,
             # 20자+)면 진짜 누출이므로 MEDIUM→HIGH 로 올려 BLOCK 한다. 사전형/짧은 값은 FLAG.
             eff_sev = sev
             if code == "generic_secret_assignment" and m.groups():
                 val = m.group(1)
                 # 진짜 키면 MEDIUM→HIGH 승격해 BLOCK. 두 신호:
                 # (a) 고-엔트로피 혼합(대/소/숫자 20자+, 고유문자 10+)
-                # (b) 보강: var/라벨 하 32자+ 연속 all-hex(대/소문자 무관, 고유 hex 6+).
+                # (b) R2: var/라벨 하 32자+ 연속 all-hex(대/소문자 무관, 고유 hex 6+).
                 #     git-hash/MD5 는 var=value 형태가 아니라 여기 도달하지 않는다.
                 mixed = (len(val) >= 20 and re.search(r"[a-z]", val)
                          and re.search(r"[A-Z]", val) and re.search(r"[0-9]", val)

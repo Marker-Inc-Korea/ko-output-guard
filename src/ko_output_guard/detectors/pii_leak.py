@@ -2,7 +2,7 @@
 전화/이메일 등 개인정보가 들어가면 누출로 본다.
 
 ko-pii 미설치 환경에서도 import 가 실패하지 않도록 lazy + graceful 하게 처리한다.
-다만 *조용히* 강등되면 PII 누출이 통과되는 걸 호출자가 모르므로, strict 모드는
+다만 *조용히* 강등되면 PII 누출이 통과되는 걸 호출자가 모르므로(OG-4), strict 모드는
 예외를 던지고, 아니면 1회 WARN 로그 + degraded 플래그로 알린다.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ _DEGRADED_WARNED = False
 
 
 class PIIBackendUnavailable(RuntimeError):
-    """strict 모드에서 ko-pii(PII 백엔드)가 없을 때 발생 — 조용한 강등을 막는다."""
+    """strict 모드에서 ko-pii(PII 백엔드)가 없을 때 발생 — 조용한 강등을 막는다(OG-4)."""
 
 
 def pii_backend_available() -> bool:
@@ -38,7 +38,10 @@ _RISK_TO_SEV = {"CRITICAL": Severity.CRITICAL, "HIGH": Severity.HIGH,
 _CONN_USERINFO = re.compile(r"[a-z][a-z0-9+.\-]*://[^\s/@]*:[^\s/@]*@[^\s/@]+")
 
 # 구분자 우회 회복용 — 사본에서 걷어내는 문자(공백/탭/콤마/세미콜론/언더스코어, 전각 포함).
-_STRIP_CHARS = frozenset(" \t,;_，；＿")
+# 줄바꿈(\n,\r)도 포함 — '한 자리/한 줄'(digit-per-line) RRN/카드 분리 누출을 collapse-and-
+# rescan 경로가 공백-분리와 동일하게 회복하게 한다. checksum·형식 검증이 ko-pii 에 있어
+# 임의 멀티라인 숫자 컬럼은 FP 되지 않는다(전화는 아래 collapse 경로에서 제외 유지).
+_STRIP_CHARS = frozenset(" \t\n\r,;_，；＿")
 
 # 출력 가드에서 제외하는 ko-pii 라벨. PERSON/ADDRESS/PERSONAL_ATTR 은 성씨-시작
 # 일반명사 오탐이 잦고, MAJOR(전공)은 '의학/약학/화학', AGE('두 살')는 맥락 의존
@@ -79,6 +82,88 @@ _BIZNO_LABEL = re.compile(r"사업자")
 # 숫자열 FP 를 막는다(자리별 공백 '1 2 4 ...'는 기존 spacing-evasion 경로가 담당).
 _BIZNO = re.compile(r"(?<![0-9])([0-9]{3}[-\s]?[0-9]{2}[-\s]?[0-9]{5})(?![0-9])")
 _BIZNO_CTX_WINDOW = 40
+
+
+# ── 라벨-게이트 형식 PII (IBAN/MAC/GPS/카드만료+CVV) — ko-pii 미커버 보강 ──────────
+# ko-pii 는 IBAN/MAC/좌표/카드만료를 잡지 않는다. 각 형식은 그 자체로 식별성이 높지만,
+# benign look-alike(펌웨어 버전·일련번호·IP·온도쌍)를 SAFE 로 남기려 *라벨로 게이트*한다.
+# 라벨↔형식 근접은 후보별로 *경계 잘린(bounded) 윈도 슬라이스* 안에서만 라벨을 찾아
+# O(n^2)(라벨수×후보수) 를 피한다(_label_near 헬퍼).
+_PII_CTX_WINDOW = 48
+
+# IBAN: 2글자 국가코드 + 2자리 검사숫자 + BBAN 11~30 영숫자(연속 또는 4자 공백그룹).
+# 'IBAN' 라벨 게이트. 길이 가변(IBAN 은 15~34자)이라 마지막 부분그룹도 허용한다.
+# (?:[ ]?[0-9A-Z]) 는 매 반복마다 최소 1글자 소비 + 상한(30) → 선형(ReDoS-safe).
+_IBAN_LABEL = re.compile(r"\bIBAN\b", re.IGNORECASE)
+_IBAN = re.compile(r"(?<![0-9A-Za-z])([A-Z]{2}[0-9]{2}(?:[ ]?[0-9A-Z]){11,30})(?![0-9A-Za-z])")
+# MAC: 6개 16진 옥텟(`:` 또는 `-` 구분). 'MAC' 라벨 게이트(버전 v1.2.3.4·IP 는 형식상 불일치).
+_MAC_LABEL = re.compile(r"\bMAC\b", re.IGNORECASE)
+_MAC = re.compile(
+    r"(?<![0-9A-Fa-f:-])"
+    r"([0-9A-Fa-f]{2}([:-])[0-9A-Fa-f]{2}(?:\2[0-9A-Fa-f]{2}){4})"
+    r"(?![0-9A-Fa-f:-])")
+# GPS 십진 좌표쌍(소수 4자리+) — '좌표/위도/경도/위치' 라벨 게이트('37.x, 127.x' 예시값 SAFE).
+_GPS_LABEL = re.compile(r"좌표|위도|경도|위치\s*정보|GPS|coordinate", re.IGNORECASE)
+_GPS = re.compile(r"(?<![0-9.])(-?[0-9]{1,3}\.[0-9]{4,})\s*,\s*(-?[0-9]{1,3}\.[0-9]{4,})(?![0-9.])")
+# 카드 만료(MM/YY) — PAN 없이 만료+CVV 묶음만 누출돼도 식별 위험. '카드/CVV/보안코드/유효
+# 기간/만료' 라벨 게이트. 만료는 01~12/YY 만(99/99·1/2·버전 미해당).
+_CARDEXP_LABEL = re.compile(r"카드|CVV|보안\s*코드|유효\s*기간|만료|expiry", re.IGNORECASE)
+_CARD_EXPIRY = re.compile(r"(?<![0-9/])((?:0[1-9]|1[0-2])/[0-9]{2})(?![0-9/])")
+
+
+def _label_near(text: str, label_pat: re.Pattern[str], s: int, e: int,
+                window: int = _PII_CTX_WINDOW) -> bool:
+    """후보 span[s:e] 의 앞/뒤 *경계 잘린* 윈도 안에 라벨이 있는지. 전체 text 가 아니라
+    슬라이스에서만 라벨을 찾아 라벨수×후보수 곱(O(n^2))을 피한다(슬라이스 길이 상한 = window)."""
+    lo = max(0, s - window)
+    hi = min(len(text), e + window)
+    return label_pat.search(text, lo, hi) is not None
+
+
+def _scan_format_pii(text: str) -> list[Violation]:
+    """라벨-게이트 형식 PII(IBAN/MAC/GPS/카드만료+CVV) → HIGH(BLOCK). 라벨 부재 시 무동작.
+
+    각 형식의 라벨이 *하나도 없으면* 그 형식은 통째로 건너뛴다(라벨 게이트 = recall-safe).
+    라벨이 있으면 후보별로 경계 잘린 윈도(_label_near)에서만 라벨 근접을 확인한다."""
+    out: list[Violation] = []
+    # 형식별 (라벨 패턴, 형식 패턴, 코드, 사유). 라벨이 text 어디에도 없으면 스킵.
+    for label_pat, val_pat, code, reason in (
+        (_IBAN_LABEL, _IBAN, "pii:iban", "IBAN near label"),
+        (_MAC_LABEL, _MAC, "pii:mac", "MAC address near label"),
+    ):
+        if label_pat.search(text) is None:
+            continue
+        for m in val_pat.finditer(text):
+            s, e = m.start(1), m.end(1)
+            if not _label_near(text, label_pat, s, e):
+                continue
+            out.append(Violation(
+                code=code, category=Category.PII_LEAK, severity=Severity.HIGH,
+                reason=reason, start=s, end=e, matched=m.group(1)[:40],
+            ))
+    # GPS 좌표쌍 — 라벨 게이트(전체 text 에 라벨 없으면 스킵).
+    if _GPS_LABEL.search(text) is not None:
+        for m in _GPS.finditer(text):
+            s, e = m.start(), m.end()
+            if not _label_near(text, _GPS_LABEL, s, e):
+                continue
+            out.append(Violation(
+                code="pii:geo", category=Category.PII_LEAK, severity=Severity.HIGH,
+                reason="GPS coordinate pair near label", start=s, end=e,
+                matched=m.group(0)[:40],
+            ))
+    # 카드 만료(MM/YY) — '카드/CVV/보안코드/유효기간/만료' 라벨 근접 시 HIGH.
+    if _CARDEXP_LABEL.search(text) is not None:
+        for m in _CARD_EXPIRY.finditer(text):
+            s, e = m.start(1), m.end(1)
+            if not _label_near(text, _CARDEXP_LABEL, s, e):
+                continue
+            out.append(Violation(
+                code="pii:card_expiry", category=Category.PII_LEAK, severity=Severity.HIGH,
+                reason="card expiry near card/CVV label", start=s, end=e,
+                matched=m.group(1)[:40],
+            ))
+    return out
 
 
 def _scan_card_context(text: str) -> list[Violation]:
@@ -294,6 +379,96 @@ def _scan_word_email(text: str) -> list[Violation]:
     return out
 
 
+# ── 비ASCII/공백 이메일 난독 해제 (homoglyph·전각마침표·한글/IDN TLD·자모분리) ─────
+# ko-pii EMAIL 은 ASCII local+domain 만 잡아 다음을 놓친다(가드 측 보강):
+#   · IDN/한글 TLD     user@naver.코리아
+#   · U+3002(。) 마침표  user@naver。com
+#   · Cyrillic 동형이의  user@gmaіl.com (і·а·о·с… → Latin)
+#   · 자(글)자-공백 분리 g i l d o n g @ n a v e r . c o m
+# 도형동형(confusable) 폴딩 + 전각/호환 마침표 폴딩 후 이메일 모양을 직접 매칭한다.
+# 산문에 떠도는 '@' 만으로는 매칭되지 않고(유효 domain+TLD 필요) homoglyph 폴딩도
+# 정해진 라틴-동형 집합만 1:1 치환이라 일반 한글/영문 산문은 영향이 없다(recall-safe).
+# Cyrillic/Greek → Latin 동형이의 글자(소문자 위주; 대문자는 NFKC 와 무관한 별도 매핑).
+_EMAIL_CONFUSABLE = {
+    "а": "a", "е": "e", "о": "o", "с": "c", "р": "p", "х": "x", "у": "y",
+    "і": "i", "ј": "j", "ѕ": "s", "к": "k", "м": "m", "н": "h", "т": "t",
+    "в": "b", "ԁ": "d", "ո": "n", "ϲ": "c", " е": "e",
+    "α": "a", "ο": "o", "ι": "i", "ν": "v", "ρ": "p", "τ": "t", "κ": "k",
+    "ε": "e", "η": "n", "μ": "u", "ѵ": "v",
+}
+# 전각/한자권 마침표 → ASCII '.'(NFKC 미폴딩분: U+3002·U+FF61). U+FF0E 는 NFKC 가 폴딩.
+_EMAIL_DOTS = {"。": ".", "｡": "."}
+# 폴딩된 사본에서 매칭할 이메일 — domain/TLD 에 한글 허용(IDN/한글 TLD).
+_DEOBF_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9._%+\-@])"
+    r"([A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9가-힣\-]{1,63}(?:\.[A-Za-z0-9가-힣\-]{1,63})+)")
+# 글자-공백 분리 이메일(g i l d o n g @ n a v e r . c o m) — 단일 글자/숫자가 공백으로
+# 갈라진 토큰열. 끝 TLD 글자 런은 다음에 글자가 더 안 붙을 때 종료(산문 단어 흡수 방지).
+# 각 런은 상한이 있다(local 64·domain 63·tld 12 — RFC 한도). 상한 없는 `{2,}` 는 '9\n9\n…'
+# 같은 입력에서 @를 못 찾고 폭발적으로 backtrack 하므로(ReDoS) 반드시 cap 한다.
+_SPACED_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9@.])"
+    r"((?:[A-Za-z0-9]\s+){1,64}@(?:\s*[A-Za-z0-9]\s+){1,63}\.\s*[A-Za-z0-9]"
+    r"(?:\s+[A-Za-z0-9]){0,11})"
+    r"(?![A-Za-z0-9])")
+_KNOWN_TLD = re.compile(
+    rf"^[A-Za-z0-9._%+\-]{{1,64}}@[A-Za-z0-9가-힣\-]{{1,63}}"
+    rf"(?:\.[A-Za-z0-9가-힣\-]{{1,63}})*\.(?:{_TLD})$", re.IGNORECASE)
+
+
+def _fold_email_confusables(text: str) -> str:
+    """homoglyph(Cyrillic/Greek→Latin) + 전각/한자권 마침표 → ASCII 1:1 폴딩(offset 보존)."""
+    if not any((c in _EMAIL_CONFUSABLE or c in _EMAIL_DOTS) for c in text):
+        return text
+    return "".join(_EMAIL_CONFUSABLE.get(c, _EMAIL_DOTS.get(c, c)) for c in text)
+
+
+def _scan_deobf_email(text: str) -> list[Violation]:
+    """비ASCII/공백 난독 이메일(homoglyph·전각마침표·한글 TLD·글자공백분리) 복원·검출.
+
+    confusable/마침표 폴딩본에서 이메일 모양을 직접 매칭(한글 TLD 허용). 글자-공백 분리는
+    별도 후보를 collapse 후 *알려진 TLD* 로 끝날 때만 인정(산문 FP 차단). MEDIUM(FLAG)이며
+    한 응답에 distinct 이메일 3+ 이면 상위 bulk 룰이 BLOCK 으로 승격한다."""
+    out: list[Violation] = []
+    seen: set[str] = set()
+    # homoglyph/마침표 폴딩본에서 매칭. 폴딩이 불필요한 한글 TLD(naver.코리아)도 같은
+    # 경로로 잡히도록, 폴딩 결과가 원본과 같아도 항상 한 번 매칭한다(1:1 폴딩이라 offset 동일).
+    folded = _fold_email_confusables(text)
+    for m in _DEOBF_EMAIL.finditer(folded):
+        # ASCII 평문 이메일(난독 아님)은 ko-pii 가 이미 잡으므로 중복 방지로 건너뛴다.
+        # 한글 TLD/homoglyph/전각마침표가 끼어 ko-pii 가 놓치는 것만 가드 측에서 보강.
+        cand = m.group(1)
+        if cand == text[m.start(1):m.end(1)] and cand.isascii():
+            continue
+        key = cand.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(Violation(
+            code="pii:email", category=Category.PII_LEAK, severity=Severity.MEDIUM,
+            reason="email via unicode evasion (homoglyph/IDN TLD/fullwidth dot)",
+            start=m.start(1), end=m.end(1), matched=cand[:40],
+        ))
+    # 글자-공백 분리: 후보를 collapse → 알려진 TLD 검증 후 인정(원본 span 은 매칭 그대로).
+    # '@' 가 없으면 분리 이메일도 없다 — 큰 입력에서 불필요한 스캔을 건너뛴다(fast-path).
+    if "@" not in text:
+        return out
+    for m in _SPACED_EMAIL.finditer(text):
+        collapsed = re.sub(r"\s+", "", m.group(1))
+        if not _KNOWN_TLD.match(collapsed):
+            continue
+        key = collapsed.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(Violation(
+            code="pii:email", category=Category.PII_LEAK, severity=Severity.MEDIUM,
+            reason="email via per-character spacing evasion",
+            start=m.start(1), end=m.end(1), matched=collapsed[:40],
+        ))
+    return out
+
+
 def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
     # 부분 주민번호(뒷 7 / 앞 6) + 라벨-앵커 카드/사업자번호는 순수 정규식이라 ko-pii
     # 미설치여도 잡는다 — 라벨이 명시된 경우만이므로 비식별 자체가 결정적. 먼저 수집해
@@ -303,10 +478,12 @@ def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
     partial += _scan_bizno_context(text)
     partial += _scan_rrn_split(text)      # 문장/줄바꿈 분리 RRN (순수 정규식)
     partial += _scan_word_email(text)     # 골뱅이/쩜/at/dot 이메일 (순수 정규식)
+    partial += _scan_format_pii(text)     # IBAN/MAC/GPS/카드만료 라벨-게이트 (순수 정규식)
+    partial += _scan_deobf_email(text)    # homoglyph/한글TLD/전각마침표/글자공백 이메일
     try:
         from ko_pii import detect_all
     except ImportError as exc:
-        # 조용히 강등하지 않는다. strict 면 예외, 아니면 1회 WARN + 부분 탐지만.
+        # OG-4: 조용히 강등하지 않는다. strict 면 예외, 아니면 1회 WARN + 부분 탐지만.
         if strict:
             raise PIIBackendUnavailable(
                 "ko-pii not installed: full PII leak detection is unavailable. "

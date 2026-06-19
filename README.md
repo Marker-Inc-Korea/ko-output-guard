@@ -169,14 +169,16 @@ pip install -e .
 
 | 데이터셋 (라이선스) | n | 결정론 recall / FPR | + 옵션 Tier-2 분류기 recall / FPR |
 |---|---:|---|---|
-| smilegate unsmile (CC-BY-SA) | 3,737 | 29.4% / **2.0%** | 92.3% / 28.4% |
-| jason9693/APEACH (CC-BY-SA-4.0) | 500 | 11.6% / **0.4%** | 88.4% / 17.2% |
-| jeanlee/KMHAS (CC-BY-SA-4.0) | 500 | 20.4% / **0.8%** | 94.0% / 44.8% |
-| AI-Hub 147 텍스트윤리검증 (NIA) | 1,000 | 2.0% / **0.2%** | 75.8% / 20.6% |
+| smilegate unsmile (CC-BY-SA) | 3,737 | 34.8% / **2.2%** | 92.3% / 28.1% |
+| jason9693/APEACH (CC-BY-SA-4.0) | 500 | 15.6% / **0.4%** | 88.8% / 17.6% |
+| jeanlee/KMHAS (CC-BY-SA-4.0) | 500 | 29.2% / **0.8%** | 93.6% / 44.4% |
+| AI-Hub 147 텍스트윤리검증 (NIA) | 1,000 | 3.2% / **0.2%** | 75.6% / 20.0% |
 
 → **결정론은 고정밀·저recall** (정상 오탐 0.2~2%, 명시적 욕설/슬러만 잡음). 의미·맥락 기반 혐오의 recall 은 **옵션 Tier-2 분류기**가 보강하나 FPR 이 오르고 도메인 의존적이다.
 
-**SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) 25/25 탐지, 정상 코드(code_search_net/the-stack) 오탐 **0.25~1%**. ⚠️ 단, "실제 유출된 벤더키"의 제3자 라벨 벤치마크가 공개돼 있지 않아 위 100%는 *형식 커버리지 기준*(third-party corpus 아님)임을 밝혀둔다.
+**개선 (2026-06).** 외부 데이터셋의 결정론 false-negative 를 분석해 TOXICITY 시드를 확장했다 — 모음늘임 정규화(`시바아아`→`시발`), 글자치환 변형(`싯발`/`씌발`/`샛기`), 초성ㅅ+완성 `발`, 음차 영어욕설, 인종·성소수자 멸칭. **기존 공개본 대비 Tier-1 det recall 이 전 데이터셋 상승**(unsmile 29.4→34.8%, APEACH 11.6→15.6%, KMHAS 20.4→29.2%, AIHub 2.0→3.2%)이면서 **FPR 은 거의 불변(±0.2%p 이내)**. 다만 의미·맥락 기반 혐오의 본격 recall 은 여전히 Tier-2 분류기가 주도한다 — 결정론은 명시적 욕설/멸칭의 high-precision fast-path 다.
+
+**SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). ⚠️ 단, "실제 유출된 벤더키"의 제3자 라벨 벤치마크가 공개돼 있지 않아 위 100%는 *형식 커버리지 기준*(third-party corpus 아님)임을 밝혀둔다.
 
 **외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out 으로만 검증했고, UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰의 한계가 있어 **향후 분류기 보완을 계획**한다.
 

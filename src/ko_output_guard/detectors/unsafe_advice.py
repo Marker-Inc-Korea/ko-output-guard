@@ -14,7 +14,7 @@ from ..result import Category, Severity, Violation
 
 # 식약처 DUR(의약품안전사용서비스) 공식 데이터 — 상호작용/금기를 추측이 아니라 공식
 # 병용금기/임부금기/연령금기로 보강. data/dur.json 은 crawl DUR 성분정보에서 생성.
-# 파일 누락/손상으로 import 자체가 깨지면 가드 전체가 죽으므로 빈 DUR 로 graceful
+# 파일 누락/손상으로 import 자체가 깨지면 가드 전체가 죽으므로(OG-9) 빈 DUR 로 graceful
 # 강등한다 — 나머지 패턴 룰은 정상 작동, DUR 보강만 비활성된다.
 try:
     _DUR = json.loads(
@@ -78,12 +78,35 @@ _STATIN = (r"심바스타틴|아토르바스타틴|로수바스타틴|프라바�
            r"로바스타틴|simvastatin|atorvastatin|rosuvastatin|pravastatin|fluvastatin|"
            r"pitavastatin|lovastatin")
 # 가짜 만병통치(false-cure) 명명 엔티티 — 암 완치/항암 대안을 표방하는 비과학 요법.
+# R4 보강: 콜로이드 은(띄어쓰기·'달' 없는 변형)과 이버멕틴/이베르멕틴(말 구충제) 추가.
+# 기존 별칭은 보존하고 alternation 만 더한다(recall-safe).
 _FALSE_CURE = (r"차가버섯|살구씨|아미그달린|비타민\s*B17|B17|레이어트릴|laetrile|amygdalin|"
                r"베이킹\s*소다|중탄산\s*나트륨|중조|콜로이달\s*실버|은\s*콜로이드|colloidal\s*silver|"
+               r"콜로이드\s*은|이버멕틴|이베르멕틴|ivermectin|말\s*페이스트|말\s*구충제|"
                r"게르손|커피\s*관장|붕사|borax|과산화수소|hydrogen\s*peroxide|MMS|이산화염소")
 # 완치·항암대안 주장 앵커 — 가짜 치료 카피의 핵심 시그널.
+# R4 보강: 코로나/바이러스 완치·박멸 주장도 받는다('코로나를 치료/바이러스를 죽') —
+# 기존 암·만병통치 앵커는 그대로 두고 alternation 추가(recall-safe).
 _CURE_CLAIM = (r"암\s*(?:완치|치료|낫|박멸|소멸)|항암(?:\s*치료)?\s*(?:대안|대신)|"
+               r"코로나(?:바이러스)?\s*(?:를|가|에)?\s*(?:치료|완치|낫|박멸|죽|회복)|"
+               r"바이러스\s*(?:를|가)?\s*(?:죽|박멸|치료|없애)|covid|코로나\s*치료|"
                r"기적|완치|만병통치|병이?\s*낫|치료법|효능")
+# 디곡신(강심배당체) 상호작용 로스터 — DUR 쌍에 없는(루프/티아지드 이뇨제, 일부 CCB)
+# 위험 병용을 전용 룰로 잡는다. 단일 약 언급은 페어 게이팅으로 미발화(recall-safe).
+_DIGOXIN = r"디곡신|digoxin"
+# 디곡신과 함께 저칼륨/농도상승 위험을 키우는 약물군: 루프·티아지드 이뇨제 + 일부 CCB.
+_DIGOXIN_PARTNER = (r"푸로세미드|푸로세마이드|furosemide|토르세미드|부메타니드|"
+                    r"히드로클로로티아지드|하이드로클로로티아지드|티아지드|"
+                    r"베라파밀|verapamil|딜티아젬|diltiazem|이뇨제")
+# 세로토닌 증후군 위험 — 트립탄(편두통) + SSRI/SNRI 또는 MAOI 병용. 둘 다 세로토닌
+# 작용을 키워 고열·경련·사망 위험. 성분 KO+EN 로스터(클래스명 우회 차단), 페어 게이팅.
+_TRIPTAN = (r"수마트립탄|졸미트립탄|나라트립탄|리자트립탄|일레트립탄|알모트립탄|"
+            r"sumatriptan|zolmitriptan|naratriptan|rizatriptan|트립탄")
+_SEROTONERGIC = (r"서트랄린|세르트랄린|sertraline|플루옥세틴|fluoxetine|파록세틴|paroxetine|"
+                 r"에스시탈로프람|escitalopram|시탈로프람|citalopram|벤라팍신|venlafaxine|"
+                 r"둘록세틴|duloxetine|렉사프로|졸로프트|프로작|SSRI|SNRI|항우울제")
+# 시메티딘(CYP 억제) + 와파린/항응고 — 출혈 위험. 시메티딘은 DUR ingredient 가 아니라 전용.
+_CIMETIDINE = r"시메티딘|cimetidine"
 # 긍정-추천 앵커 — 마케팅 카피는 명령형 동사 대신 추천 명사로 권장을 표현한다
 # ('완벽한 시너지', '마음껏', '즐기세요'). 위험 엔티티 페어로 게이팅돼 단독 등장 FP 없음.
 _ENDORSE = (r"시너지|조합|완벽|마음껏|두\s*배|더\s*효과|즐기|추천|곁들|함께|같이|"
@@ -122,7 +145,7 @@ _RAW_MEAT = (r"돼지\s*생간|멧돼지\s*생고기|생고기\s*회|소\s*생�
 _TOXIC_EN = r"bleach|methanol|antifreeze|nicotine|kerosene|gasoline|lye|ethylene\s*glycol|rat\s*poison"
 _INGEST_EN = r"drink|swallow|ingest|gargle|consume|sip|chug"
 
-# bare 안전 토큰(주의/위험/병원) 한 단어가 문장 어디든 있다고 위험 권고를
+# OG-1 fix — bare 안전 토큰(주의/위험/병원) 한 단어가 문장 어디든 있다고 위험 권고를
 # 무력화하면 공격자가 끝에 '주의'만 붙여 우회한다('표백제를 드세요 주의'). 그래서 단순
 # 키워드 존재가 아니라 *금지/만류 구조*(위험 동작 동사에 인접한 부정·금지·결과경고)일
 # 때만 경고로 인정한다. 진짜 경고는 ① 금지('마시지 마세요/먹으면 안 됩니다'), ② 만류
@@ -140,7 +163,9 @@ _WARNING_STRUCTURE = re.compile(
     r"|(?:약사|의사|전문가|병원|응급)\s*(?:와|에|을|를)?\s*(?:상담|상의|확인|가세요|방문)"
     # ④ 조건-결과: (동작/중단)면/시면/으면/하면 … (해악어). 섭취뿐 아니라 중단('끊으면
     # 위험')도 — 조건절+해악 결합이라 bare 키워드 우회와 구조적으로 다르다.
-    r"|(?:마시|먹|드시|복용|섭취|끊|중단|그만|놓치|빼먹)\w*\s*(?:면|시면|으면|하면)"
+    # \w* 무한 반복은 '끊끊끊…' 같은 반복 입력에서 백트래킹 ReDoS 를 부른다 — 한국어
+    # 어간+어미는 짧으므로 \w{0,12} 로 캡한다(실제 매칭 보존, 의미 동일, 백트래킹 제거).
+    r"|(?:마시|먹|드시|복용|섭취|끊|중단|그만|놓치|빼먹)\w{0,12}\s*(?:면|시면|으면|하면)"
     r"[^.\n]{0,16}?"
     r"(?:위험|독성|중독|사망|손상|출혈|멍|부작용|사고|쇼크|마비|발작|해롭|악화|중복)"
 )
@@ -148,7 +173,7 @@ _WARNING_STRUCTURE = re.compile(
 _NEG_AFTER = re.compile(r"하지\s*않|지\s*않|없|아니")
 
 # 영문 경고/만류 구조 — 한글 룰과 대칭. 'do not drink bleach, it is dangerous'(안전 안내)는
-# SAFE, 'you should drink bleach'(권장)는 BLOCK 으로 구분. bare 'dangerous'가 아니라
+# SAFE, 'you should drink bleach'(권장)는 BLOCK 으로 구분(OG-9). bare 'dangerous'가 아니라
 # 금지(do not/never/avoid)나 명시 경고(is dangerous/toxic/poisonous/harmful) 구조여야 한다.
 _WARNING_STRUCTURE_EN = re.compile(
     r"(?i)\b(?:do\s*not|don't|never|avoid|must\s*not|should\s*not|shouldn't|"
@@ -157,19 +182,26 @@ _WARNING_STRUCTURE_EN = re.compile(
 )
 
 
-def _sentence_span(text: str, s: int, e: int) -> str:
-    """매칭이 속한 문장(. ! ? 줄바꿈 경계) 전체를 돌려준다 — 좁은 윈도로는 문장 끝
-    경고('…위험이 있으니 주의')를 놓쳐 정상 경고가 과탐되므로 문장 단위로 본다."""
+def _sentence_bounds(text: str, s: int, e: int) -> tuple[int, int]:
+    """매칭이 속한 문장(. ! ? 줄바꿈 경계)의 (left, right) 오프셋. 경계 탐색은
+    bounded rfind/find 라 선형 — 큰 텍스트에서도 매칭당 O(1)~O(경계간격)이다."""
     bounds = [text.rfind(c, 0, s) for c in (".", "!", "?", "\n")]
     left = max(bounds) + 1 if max(bounds) >= 0 else 0
     ends = [x for x in (text.find(c, e) for c in (".", "!", "?", "\n")) if x != -1]
     right = min(ends) if ends else len(text)
+    return left, right
+
+
+def _sentence_span(text: str, s: int, e: int) -> str:
+    """매칭이 속한 문장 전체 문자열 — 좁은 윈도로는 문장 끝 경고('…위험이 있으니 주의')를
+    놓쳐 정상 경고가 과탐되므로 문장 단위로 본다."""
+    left, right = _sentence_bounds(text, s, e)
     return text[left:right]
 
 
 def _has_genuine_warning(sentence: str) -> bool:
     """문장에 진짜 안전경고 *구조*가 있는지. bare 키워드(주의/위험) 존재만으로는 안 되고
-    금지·만류·안내회피·조건결과 구조여야 한다. '위험하지 않다'식 부정 안심은
+    금지·만류·안내회피·조건결과 구조여야 한다(OG-1). '위험하지 않다'식 부정 안심은
     경고가 아니라 오히려 위험 권고를 강화하므로 그런 매칭은 무시한다(negation-aware)."""
     for m in _WARNING_STRUCTURE.finditer(sentence):
         if not _NEG_AFTER.search(sentence[m.end():m.end() + 8]):
@@ -177,7 +209,7 @@ def _has_genuine_warning(sentence: str) -> bool:
     return bool(_WARNING_STRUCTURE_EN.search(sentence))
 
 _PATTERNS: list[tuple[re.Pattern[str], Severity, str]] = [
-    # 독성/공업 물질 + 섭취 권장. filler 윈도를 {0,40}으로 넓혀 물질↔동사 사이에
+    # 독성/공업 물질 + 섭취 권장. filler 윈도를 {0,40}으로 넓혀(OG-9) 물질↔동사 사이에
     # 수식어를 끼워 우회('표백제를 컵에 잘 희석한 다음 천천히 드세요')하는 걸 막는다.
     # 경고 문장은 _has_genuine_warning 으로 별도 억제되므로 FP 위험 없음.
     (re.compile(rf"(?:{_TOXIC})[^.\n]{{0,40}}?{_INGEST}"), Severity.CRITICAL, "toxic_ingestion"),
@@ -255,12 +287,62 @@ _PATTERNS: list[tuple[re.Pattern[str], Severity, str]] = [
         rf"(?:{_ENDORSE}|채워|보충)"),
      Severity.HIGH, "hyperkalemia_interaction"),
     # 가짜 만병통치(false-cure) — 명명 엔티티(차가버섯/살구씨B17/베이킹소다/콜로이달실버/
-    # 게르손/붕사 등) + 완치·항암대안 주장 + 섭취/용량 단서. 세 신호 동시 게이팅으로
-    # '차가버섯은 식품입니다'(주장·용량 없음) 같은 benign 은 미발화(recall-safe).
+    # 이버멕틴/콜로이드 은/게르손/붕사 등) + 완치·항암대안·코로나치료 주장 + 섭취/용량 단서.
+    # 세 신호 동시 게이팅으로 '차가버섯은 식품입니다'(주장·용량 없음) 같은 benign 은 미발화.
     (re.compile(
         rf"(?:{_FALSE_CURE})[^.\n]{{0,30}}?(?:{_CURE_CLAIM})|"
         rf"(?:{_CURE_CLAIM})[^.\n]{{0,30}}?(?:{_FALSE_CURE})"),
      Severity.HIGH, "false_cure"),
+    # 디곡신 + 루프/티아지드 이뇨제·CCB 병용 권장 — 저칼륨·농도상승으로 부정맥·중독.
+    # DUR 쌍에 없어 전용 룰로. 두 엔티티 동시 등장 + _ENDORSE/병용 앵커로 게이팅 →
+    # '디곡신은 심부전에 쓰입니다'(페어·앵커 없음)는 미발화(recall-safe). 어순 양방향.
+    (re.compile(
+        rf"(?:{_DIGOXIN})[^.\n]{{0,22}}?(?:{_DIGOXIN_PARTNER})[^.\n]{{0,18}}?(?:{_ENDORSE})|"
+        rf"(?:{_DIGOXIN_PARTNER})[^.\n]{{0,22}}?(?:{_DIGOXIN})[^.\n]{{0,18}}?(?:{_ENDORSE})"),
+     Severity.HIGH, "digoxin_interaction"),
+    # 세로토닌 증후군 — 트립탄(편두통) + SSRI/SNRI/MAOI 병용 권장. 둘 다 세로토닌 작용을
+    # 키워 고열·경련·사망. 성분 로스터 페어 + 병용/_ENDORSE 앵커로 게이팅 → 단일 트립탄
+    # 복용 안내('수마트립탄은 하루 한 알')는 미발화(recall-safe). 어순 양방향.
+    (re.compile(
+        rf"(?:{_TRIPTAN})[^.\n]{{0,22}}?(?:{_SEROTONERGIC}|{_MAOI})[^.\n]{{0,18}}?"
+        rf"(?:{_ENDORSE})|"
+        rf"(?:{_SEROTONERGIC}|{_MAOI})[^.\n]{{0,22}}?(?:{_TRIPTAN})[^.\n]{{0,18}}?"
+        rf"(?:{_ENDORSE})"),
+     Severity.HIGH, "serotonin_syndrome"),
+    # 시메티딘(CYP 억제) + 와파린/항응고 병용 권장 — 항응고 효과 증대로 출혈 위험.
+    # 두 엔티티 동시 등장 + 병용/_ENDORSE 앵커. 어순 양방향. 단일 언급은 미발화.
+    (re.compile(
+        rf"(?:{_CIMETIDINE})[^.\n]{{0,22}}?(?:와파린|항응고제?)[^.\n]{{0,18}}?(?:{_ENDORSE})|"
+        rf"(?:와파린|항응고제?)[^.\n]{{0,22}}?(?:{_CIMETIDINE})[^.\n]{{0,18}}?(?:{_ENDORSE})"),
+     Severity.HIGH, "cimetidine_interaction"),
+    # 메트포르민 + 조영제(요오드) — 검사 시 일시 중단해야 하는데 '계속 복용/그대로'를
+    # 권하면 신장·젖산산증 위험. '계속/그대로/중단 없이' 같은 continue-despite 앵커 필요 →
+    # '메트포르민은 당뇨약입니다'(조영제·계속 앵커 없음)는 미발화. 어순 양방향.
+    (re.compile(
+        r"메트포르민[^.\n]{0,24}?(?:조영제|요오드|CT\s*조영|조영\s*검사)[^.\n]{0,18}?"
+        r"(?:계속|그대로|중단\s*없이|당일에?도|복용하세요|드세요|괜찮)|"
+        r"(?:조영제|요오드|CT\s*조영|조영\s*검사)[^.\n]{0,24}?메트포르민[^.\n]{0,18}?"
+        r"(?:계속|그대로|중단\s*없이|복용하세요|드세요|괜찮)"),
+     Severity.HIGH, "metformin_contrast_interaction"),
+    # 알로푸리놀 + 아자티오프린 병용 권장 — 골수억제(치명적 혈구감소). 둘 다 DUR ingredient
+    # 이나 공식 쌍에 누락돼 _scan_dur 가 못 잡으므로 전용 룰. 병용/_ENDORSE 앵커, 어순 양방향.
+    (re.compile(
+        rf"(?:알로푸리놀|allopurinol)[^.\n]{{0,22}}?(?:아자티오프린|azathioprine|"
+        rf"머캅토퓨린|6-MP)[^.\n]{{0,18}}?(?:{_ENDORSE})|"
+        rf"(?:아자티오프린|azathioprine|머캅토퓨린|6-MP)[^.\n]{{0,22}}?"
+        rf"(?:알로푸리놀|allopurinol)[^.\n]{{0,18}}?(?:{_ENDORSE})"),
+     Severity.HIGH, "allopurinol_azathioprine_interaction"),
+    # 백신 미신(vaccine misinformation) — ① (백신/예방접종) + (자폐/자폐증) 인과 주장
+    # 동시 등장, 또는 ② (백신/예방접종) + 거부·접종 만류('접종하지 마/맞지 마/거부/믿지
+    # 마') 권고. 두 신호 게이팅으로 benign('백신 부작용 상담은 의료진과', '백신 접종 후
+    # 발열은 흔한 반응')은 미발화(recall-safe). 어순 양방향.
+    (re.compile(
+        r"(?:백신|예방\s*접종|vaccine)[^.\n]{0,30}?(?:자폐(?:증|스펙트럼)?|autism)|"
+        r"(?:자폐(?:증|스펙트럼)?|autism)[^.\n]{0,30}?(?:백신|예방\s*접종|vaccine)|"
+        r"(?:백신|예방\s*접종|주사|접종)[^.\n]{0,24}?"
+        r"(?:접종하지\s*마|맞지\s*마|맞히지\s*마|거부(?:하세요|하십|해야|하라)?|"
+        r"믿지\s*마|시키지\s*마|하지\s*마세요|위험하니\s*피)"),
+     Severity.HIGH, "vaccine_misinformation"),
     # 소아에게 성인 용량/약 그대로 — 생애주기(영유아) 과량 위험. '절반/줄여'는 매칭 안 됨.
     # (A) child-noun + '어른/성인 (용량|약|것|타이레놀…)\s*(그대로|만큼|동일|똑같)' + 투여.
     #     '용량' 단어 외에 약·것·약품명도 받아 '어른 타이레놀을 그대로' 우회를 잡는다.
@@ -315,9 +397,14 @@ _PATTERNS: list[tuple[re.Pattern[str], Severity, str]] = [
     # _has_genuine_warning 으로 별도 억제.
     (re.compile(
         r"(?:인슐린|혈압약|항경련제|갑상선약|면역억제제|항응고제|결핵약|"
+        r"항생제|항우울제|정신과\s*약|렉사프로|"
         r"항암(?:치료|제)?|화학(?:요법|치료)|방사선\s*치료|면역항암|표적\s*치료)[^.\n]{0,28}?"
         r"(?:끊고|끊으|중단|그만\s*드|그만\s*두|멈추(?:어도|면|고)|멈춰도|"
-        r"안\s*드셔도\s*(?:돼|된|좋))"),
+        r"안\s*드셔도\s*(?:돼|된|좋)|"
+        # R4 보강: 부드러운 중단 권유('드실 필요(가)? 없', '안 드셔도', '약을 내려놓',
+        # '복용을 멈추', '버리') — 기존 동사는 보존하고 alternation 만 추가(recall-safe).
+        r"드실?\s*필요(?:가|는)?\s*없|드시지\s*않아도|내려놓|복용을?\s*멈추|"
+        r"즉시\s*중단|바로\s*끊|버리(?:세요|십|시)|복용\s*중단)"),
      Severity.HIGH, "essential_drug_discontinuation"),
     # 독버섯/야생 섭취 권장
     (re.compile(r"(?:야생|들|산에서\s*캔|이름\s*모르는)\s*버섯[^.\n]{0,15}?"
@@ -377,7 +464,7 @@ def _scan_dur_sentence(sentence: str) -> list[Violation]:
 
 def _scan_dur(text: str) -> list[Violation]:
     """DUR 공식 데이터 기반 — 병용금기 성분쌍/임부금기/연령금기 성분 + 권고 동사면 위험.
-    경고 억제는 *같은 문장* 범위로 제한한다 — 다른 문장의 무관한 경고('와파린은
+    경고 억제는 *같은 문장* 범위로 제한한다(OG-9) — 다른 문장의 무관한 경고('와파린은
     주의')가 위험 권고가 든 문장의 판정을 무력화하면 안 되므로 문장 단위로 본다."""
     out: list[Violation] = []
     for sentence in re.split(r"[.!?\n]", text):
@@ -387,9 +474,18 @@ def _scan_dur(text: str) -> list[Violation]:
 
 def scan_unsafe_advice(text: str) -> list[Violation]:
     out: list[Violation] = []
+    # 같은 문장에 여러 매칭이 떨어지면 _has_genuine_warning 을 매칭마다 재실행해 O(n^2)
+    # 가 된다(반복 엔티티 입력). 문장 (left,right) 경계로 경고 판정을 메모이즈해 문장당
+    # 1회만 평가한다 — 의미는 동일(같은 문장 → 같은 경고 여부), 순수 성능 최적화.
+    warn_cache: dict[tuple[int, int], bool] = {}
     for pat, sev, code in _PATTERNS:
         for m in pat.finditer(text):
-            if _has_genuine_warning(_sentence_span(text, m.start(), m.end())):
+            bounds = _sentence_bounds(text, m.start(), m.end())
+            warned = warn_cache.get(bounds)
+            if warned is None:
+                warned = _has_genuine_warning(text[bounds[0]:bounds[1]])
+                warn_cache[bounds] = warned
+            if warned:
                 continue  # 같은 문장에 (부정 아닌) 안전 경고 → 위험 권장 아님
             out.append(
                 Violation(

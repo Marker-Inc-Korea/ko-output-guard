@@ -17,7 +17,7 @@ from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Viol
 # toxicity/unsafe/prompt-leak 은 정규화본 offset 이라 원본에 적용하면 어긋난다.
 _ORIGINAL_OFFSET = frozenset({Category.SECRET_LEAK, Category.PII_LEAK})
 
-# 위해 카테고리(위험권고/자해/무기)는 정규화본 offset 이라 span 마스킹이 어긋난다.
+# OG-6: 위해 카테고리(위험권고/자해/무기)는 정규화본 offset 이라 span 마스킹이 어긋난다.
 # 이들이 BLOCK 을 유발하면 원문을 그대로 돌려주면 안 되므로(위해 내용 재노출) 전체를
 # 차단 placeholder 로 대체한다.
 _DANGEROUS_CATEGORIES = frozenset({
@@ -74,7 +74,7 @@ class Guard:
             violations += detectors.scan_secrets(text)
         if p.detect_pii:
             violations += detectors.scan_pii_leak(text, strict=p.strict)
-            # ko-pii 부재로 전체 PII 탐지가 비활성이면 강등 표시(strict 면 위에서 예외).
+            # OG-4: ko-pii 부재로 전체 PII 탐지가 비활성이면 강등 표시(strict 면 위에서 예외).
             if not detectors.pii_backend_available():
                 degraded = True
         if p.detect_unsafe_advice:
@@ -117,7 +117,7 @@ class Guard:
         vt = tuple(violations)
         redacted = None
         if verdict is Verdict.BLOCK:
-            # 위해 카테고리가 BLOCK 사유면 span 마스킹(정규화 offset)로는 원문이
+            # OG-6: 위해 카테고리가 BLOCK 사유면 span 마스킹(정규화 offset)로는 원문이
             # 그대로 새므로 전체를 차단 placeholder 로 대체한다. SECRET/PII 만 BLOCK 이면
             # 기존 span 마스킹을 유지한다(형식 보존).
             if any(v.category in _DANGEROUS_CATEGORIES for v in blocking):

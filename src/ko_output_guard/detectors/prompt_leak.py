@@ -136,7 +136,7 @@ def _extract_rule_phrases(context: str) -> list[str]:
 def _system_prompt_clause_echo(text: str, context: str) -> int:
     """출력이 시스템 프롬프트의 변별력 있는 규칙구를 몇 개나 그대로 재현하는지.
 
-    1인칭 framing 없이 JSON/불릿/3인칭/요약으로 재구성해 누출하는 적대적 입력 생성 패턴 대응.
+    1인칭 framing 없이 JSON/불릿/3인칭/요약으로 재구성해 누출하는 Gemma 패턴 대응.
     공백 무시 substring 매칭으로 띄어쓰기 변형도 잡되, N>=2 절 이상 일치할 때만
     누출로 본다(단일 일반어 우연 일치로 인한 FP 방지).
     """

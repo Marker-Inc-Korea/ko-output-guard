@@ -58,7 +58,7 @@ class GuardResult(BaseModel):
     violations: tuple[Violation, ...] = ()
     # 가장 안전한 출력형: BLOCK 사유를 마스킹한 텍스트(없으면 None).
     redacted_text: str | None = None
-    # PII 백엔드(ko-pii) 미설치 등으로 일부 탐지가 비활성된 '강등' 상태인지.
+    # OG-4: PII 백엔드(ko-pii) 미설치 등으로 일부 탐지가 비활성된 '강등' 상태인지.
     # True 면 PII 누출 탐지가 부분적으로만(부분 RRN 정규식 등) 동작했음을 호출자에 알린다.
     degraded: bool = False
 

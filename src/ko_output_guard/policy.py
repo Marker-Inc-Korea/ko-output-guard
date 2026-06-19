@@ -25,7 +25,7 @@ class GuardPolicy(BaseModel):
     # SECRET/PII 는 형식 보존을 위해 항상 원본에서 검사한다(정규화 미적용).
     normalize: bool = True
 
-    # PII 백엔드(ko-pii)가 없으면 *조용히* 강등되지 않게 한다. strict=True 면
+    # OG-4: PII 백엔드(ko-pii)가 없으면 *조용히* 강등되지 않게 한다. strict=True 면
     # PIIBackendUnavailable 예외를 던지고, False(기본)면 1회 WARN 로그 + GuardResult.degraded.
     strict: bool = False
 
