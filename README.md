@@ -167,14 +167,18 @@ pip install -e .
 
 **TOXICITY — 네이티브 한국어 4개 제3자 데이터셋** (번역 없음):
 
-| 데이터셋 (라이선스) | n | 결정론 recall / FPR | + 옵션 Tier-2 분류기 recall / FPR |
-|---|---:|---|---|
-| smilegate unsmile (CC-BY-SA) | 3,737 | 34.8% / **2.2%** | 92.3% / 28.1% |
-| jason9693/APEACH (CC-BY-SA-4.0) | 500 | 15.6% / **0.4%** | 88.8% / 17.6% |
-| jeanlee/KMHAS (CC-BY-SA-4.0) | 500 | 29.2% / **0.8%** | 93.6% / 44.4% |
-| AI-Hub 147 텍스트윤리검증 (NIA) | 1,000 | 3.2% / **0.2%** | 75.6% / 20.0% |
+값은 `recall / FPR / **precision**` (%). precision 은 각 셋의 고유 base-rate 기준이다(아래 주의).
 
-→ **결정론은 고정밀·저recall** (정상 오탐 0.2~2%, 명시적 욕설/슬러만 잡음). 의미·맥락 기반 혐오의 recall 은 **옵션 Tier-2 분류기**가 보강하나 FPR 이 오르고 도메인 의존적이다.
+| 데이터셋 (라이선스) | n | 결정론 Tier-1 | Tier-2 cascade @thr=0.85 |
+|---|---:|---|---|
+| smilegate unsmile (CC-BY-SA) | 3,737 | 34.8 / 2.2 / **97.9** | 85.4 / 13.9 / **94.8** |
+| jason9693/APEACH (CC-BY-SA-4.0) | 500 | 15.6 / 0.4 / **97.5** | 72.0 / 6.8 / **91.4** |
+| jeanlee/KMHAS (CC-BY-SA-4.0) | 500 | 29.2 / 0.8 / **97.3** | 91.6 / 29.6 / **75.6** |
+| AI-Hub 147 텍스트윤리검증 (NIA) | 1,000 | 3.2 / 0.2 / **94.1** | 59.4 / 9.0 / **86.8** |
+
+> **precision 은 base-rate 의존**(각 셋의 toxic:clean 비율 기준)이라, 운영 환경 비율이 다르면 달라진다. recall·FPR 은 base-rate 무관이므로 둘을 함께 본다.
+
+→ **결정론(Tier-1)은 고-precision·저-recall** — precision **94~98%**(명시적 욕설/슬러만 고정밀로 잡고, recall 은 의미·맥락 혐오를 놓침). 의미 기반 recall 은 **옵션 Tier-2 분류기**가 보강한다: 권장 동작점 **thr=0.85 에서 recall 59~92% / precision 76~95%**. recall-최대점(thr=0.50: recall 76~94% / FPR 18~44% / precision 68~91%)부터 정밀-우선(thr=0.95)까지 전 구간 sweep 은 `eval/` 참조. toxicity cascade 는 BLOCK 이 아니라 **FLAG(human review)** 라 precision 우선 동작점이 적절하다.
 
 **개선 (2026-06).** 외부 데이터셋의 결정론 false-negative 를 분석해 TOXICITY 시드를 확장했다 — 모음늘임 정규화(`시바아아`→`시발`), 글자치환 변형(`싯발`/`씌발`/`샛기`), 초성ㅅ+완성 `발`, 음차 영어욕설, 인종·성소수자 멸칭. **기존 공개본 대비 Tier-1 det recall 이 전 데이터셋 상승**(unsmile 29.4→34.8%, APEACH 11.6→15.6%, KMHAS 20.4→29.2%, AIHub 2.0→3.2%)이면서 **FPR 은 거의 불변(±0.2%p 이내)**. 다만 의미·맥락 기반 혐오의 본격 recall 은 여전히 Tier-2 분류기가 주도한다 — 결정론은 명시적 욕설/멸칭의 high-precision fast-path 다.
 
