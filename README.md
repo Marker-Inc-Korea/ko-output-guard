@@ -177,6 +177,8 @@ pip install -e .
 | AI-Hub 147 텍스트윤리검증 (NIA) | 1,000 | 3.2 / 0.2 / **94.1** | 59.4 / 9.0 / **86.8** |
 
 > **precision 은 base-rate 의존**(각 셋의 toxic:clean 비율 기준)이라, 운영 환경 비율이 다르면 달라진다. recall·FPR 은 base-rate 무관이므로 둘을 함께 본다.
+> **Tier-2 학습/평가 관계**: BERT cascade 는 smilegate unsmile-train 으로 학습했다 → **unsmile cascade 는 in-distribution**(학습셋 동계열)이고 **APEACH·KMHAS·AIHub cascade 가 진짜 held-out 교차검증**이다. Tier-1(결정론)은 학습이 없어 4개 모두 순수 외부.
+> **벤치 FPR ≠ 일상대화 FP**: 위 FPR 은 적대적·균형 셋 기준이다 — 캐주얼 대화엔 별도 FP 가 있다(예: 구어 강조어 `존나 맛있다`를 toxicity FLAG). **단 FLAG(검토)이지 BLOCK 이 아니다.**
 
 → **결정론(Tier-1)은 고-precision·저-recall** — precision **94~98%**(명시적 욕설/슬러만 고정밀로 잡고, recall 은 의미·맥락 혐오를 놓침). 의미 기반 recall 은 **옵션 Tier-2 분류기**가 보강한다: 권장 동작점 **thr=0.85 에서 recall 59~92% / precision 75.6~94.8%**. recall-최대점(thr=0.50: recall 76~94% / FPR 18~44% / precision 67.8~90.8%)부터 정밀-우선(thr=0.95)까지 전 구간 sweep 은 `eval/` 참조. toxicity cascade 는 BLOCK 이 아니라 **FLAG(human review)** 라 precision 우선 동작점이 적절하다.
 
@@ -184,7 +186,7 @@ pip install -e .
 
 **SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). ⚠️ 단, "실제 유출된 벤더키"의 제3자 라벨 벤치마크가 공개돼 있지 않아 위 100%는 *형식 커버리지 기준*(third-party corpus 아님)임을 밝혀둔다.
 
-**외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out 으로만 검증했고, UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰의 한계가 있어 **향후 분류기 보완을 계획**한다.
+**외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out 으로만 검증했고(SELF_HARM 은 EN→KO 번역 proxy 에서 cascade recall 이 내부 holdout 96.6% → **외부 46.5% 로 크게 deflate** — 번역 의존·FPR 급등이라 native-KO 외부셋이 필요), UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰의 한계가 있어 **향후 분류기 보완을 계획**한다.
 
 ---
 
