@@ -209,9 +209,9 @@ guard = Guard(tier2={Category.TOXICITY: lambda s: clf.is_toxic(s)})
 
 **개선 (2026-06).** 외부 데이터셋의 결정론 false-negative 를 분석해 TOXICITY 시드를 확장했다 — 모음늘임 정규화(`시바아아`→`시발`), 글자치환 변형(`싯발`/`씌발`/`샛기`), 초성ㅅ+완성 `발`, 음차 영어욕설, 인종·성소수자 멸칭. **기존 공개본 대비 Tier-1 det recall 이 전 데이터셋 상승**(unsmile 29.4→34.8%, APEACH 11.6→15.6%, KMHAS 20.4→29.2%, AIHub 2.0→3.2%)이면서 **FPR 은 거의 불변(±0.2%p 이내)**. 다만 의미·맥락 기반 혐오의 본격 recall 은 여전히 Tier-2 분류기가 주도한다 — 결정론은 명시적 욕설/멸칭의 high-precision fast-path 다.
 
-**SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). ⚠️ 단, "실제 유출된 벤더키"의 제3자 라벨 벤치마크가 공개돼 있지 않아 위 100%는 *형식 커버리지 기준*(third-party corpus 아님)임을 밝혀둔다.
+**SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). 제3자(**TruffleHog**) secret 정규식 **762종** 형식에서 ko 탐지 **80.2%**(598/746 — 패턴별 라벨드 샘플 합성). ⚠️ 두 수치 모두 *형식 커버리지*다: 25/25 는 자가형식, TruffleHog 80%는 제3자-정의 형식이나 **샘플을 패턴에서 합성**(라벨드 `kw=token` 형태 → ko 일반규칙과 정합)한 것이라 다소 낙관적이고, **실제 유출(wild-leak) 라벨 코퍼스 기준이 아니다**(SecretBench 같은 wild 코퍼스는 별도 필요).
 
-**외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out 으로만 검증했고(SELF_HARM 은 EN→KO 번역 proxy 에서 cascade recall 이 내부 holdout 96.6% → **외부 46.5% 로 크게 deflate** — 번역 의존·FPR 급등이라 native-KO 외부셋이 필요), UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰의 한계가 있어 **향후 분류기 보완을 계획**한다.
+**외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out + MT proxy 로만 검증했다. SELF_HARM 을 vibhorag101(r/SuicideWatch, EN→KO MT proxy, n=400)에서 측정: **결정론 det recall 3.5%**(7/200) / FPR 0.5%, Tier-2 cascade 는 holdout 96.6% → **외부 46.5% 로 크게 deflate**. ⚠️ 이 proxy 는 **자살 ideation** 라벨인데 SELF_HARM 검출기는 *자해 방법/조장* 을 잡고 **ideation·위기 표현은 일부러 SAFE(위기개입 안내)** 로 두므로, 낮은 recall 은 상당 부분 라벨-정의 불일치 + 설계의도다(번역 의존도 추가). UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰 한계가 있어 **향후 분류기 보완을 계획**한다.
 
 ---
 
