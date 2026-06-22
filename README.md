@@ -215,6 +215,22 @@ guard = Guard(tier2={Category.TOXICITY: lambda s: clf.is_toxic(s)})
 
 ---
 
+## 알려진 한계 & 잔여 미탐 (red-team)
+
+**범위는 의도적으로 좁다 — 범용 콘텐츠 모더레이터가 아니라 식약처 AI 배포용 도메인 가드다.**
+다루는 7범주: SECRET 누출 · PII 누출 · UNSAFE_ADVICE(식약처 약물·식품 안전) · SELF_HARM · WEAPONS · TOXICITY · PROMPT_LEAK. **다음은 의도적으로 다루지 않는다**(범용 배포 시 검출기 추가 또는 범용 Tier-2 모더레이션 레이어링 필요): 성적 콘텐츠/CSAM, 폭력·그래픽 묘사, 일반 혐오·괴롭힘(욕설 수준 초과), 일반 허위정보(false_cure 외), 불법행위(무기·약물 외 — 해킹·사기 등), 차별·extremism, 무자격 금융·법률 조언.
+
+검출은 **결정론 시드 + DUR** 기반 고-precision Tier-1 이다. 식약처 핵심 사고형(브로민 염분대체·사린 신경작용제·약물 중복/상호작용·표백제 섭취·독버섯)은 잡고, 정당한 안전경고·거짓정보 반박·상호작용 주의문은 과차단하지 않는다(negation/debunk-aware). 의미·맥락 recall 은 선택적 Tier-2 영역이다.
+
+적대적 레드팀에서 확인된 **잔여 미탐(Tier-2/완곡어 영역으로 의도)**:
+- SECRET: 토큰을 **글자별 공백**으로 쪼갠 우회(`x o x b - …`) — despace 재스캔은 일반 텍스트 FP 위험이라 보류
+- UNSAFE_ADVICE: **의미적** 약물 상호작용을 우회 서술(예: 혈압약 + 오메가-3 고용량 → 출혈)
+- UNSAFE_ADVICE: 문장 경계 넘는 거짓 해독 주장(`익히면 독성 사라지니…`), **복어 가정조리 완곡어**(결정론 fix 가 benign `전문 조리사만 손질` 과 `조리사 ⊃ 조리` 로 충돌해 보류)
+
+외부 검증 caveat: SECRET 25/25·TruffleHog 80% 는 **형식 커버리지**(wild-leak 코퍼스 아님), SELF_HARM/PROMPT_LEAK/UNSAFE_ADVICE 는 native-KO 외부셋 부재(self_harm proxy 96.6%→46.5% deflate), Tier-2 cascade 의 unsmile 행은 in-distribution.
+
+---
+
 ## 라이선스
 
 MIT © 2026 modak000 — [`LICENSE`](./LICENSE) 참조.
