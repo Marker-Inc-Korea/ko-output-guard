@@ -45,6 +45,14 @@ _TRANSLIT_PROFANITY = re.compile(r"뻑유|퍽유|뻐큐|뻑큐|쉣|쉿발|뻑킹
 # 가려지지 않아 그대로 탐지된다.
 _TOX_WHITELIST = re.compile(r"시발(?=[점역지])")
 _TOX_WHITELIST_MASK = "△△"  # 어간을 끊되 길이 보존(span 영향 최소)
+# FP 화이트리스트(강조어): '존나' 는 비속어지만 긍정 강조어('존나 맛있다/좋다')로도 흔히 쓰인다.
+# 명백한 칭찬·긍정 형용사가 바로 뒤따를 때만 가린다(FLAG 과탐 완화). 부정·공격 문맥
+# ('존나 머가리'/'존나 사람갖고 노네')은 긍정어가 아니라 가려지지 않아 그대로 탐지된다 →
+# unsmile 등 외부 toxic recall 에 영향 없음. 다른 비속어가 같이 있으면 그쪽이 잡는다.
+_TOX_INTENSIFIER_OK = re.compile(
+    r"존나(?=\s*(?:맛있|존맛|좋아|좋은|좋다|좋네|예쁘|이쁘|멋있|멋지|귀엽|훌륭|최고|대박|짱|꿀잼|"
+    r"잘\s?하|잘한|잘했|재밌|재미있|행복|사랑|편하|편안|신나|쩐다|쩔))"
+)
 # 전각/로마자/leet 우회(ｓｉｂａｌ→정규화→sibal, 영타 tlqkf, si8al/t1qkf 등). 대소문자 무시.
 # leet 치환(i→1, b→8, a→4/@, l→1)을 문자클래스로 흡수한다.
 _ROMAN_PROFANITY = re.compile(
@@ -163,7 +171,7 @@ def _mask_whitelist(s: str) -> str:
     """학술·중립어(始發點/始發驛/始發地)의 '시발' 만 동일 길이 토큰으로 가려 어간 오탐을 막는다.
     길이를 보존하므로 원문 기준 span(start/end)은 그대로 유효하고, 가려진 위치는 실제 욕설이
     아니라 매칭에 영향 없다. _TOX_WHITELIST 가 lookahead 한정이라 단일 패스로 O(n)."""
-    return _TOX_WHITELIST.sub(_TOX_WHITELIST_MASK, s)
+    return _TOX_INTENSIFIER_OK.sub(_TOX_WHITELIST_MASK, _TOX_WHITELIST.sub(_TOX_WHITELIST_MASK, s))
 
 
 def scan_toxicity(text: str) -> list[Violation]:

@@ -1,10 +1,8 @@
 """Benign casual-conversation FP suite (precision on non-adversarial traffic).
 
 The headline TOXICITY FPR is measured on adversarial/balanced benchmark sets and
-understates casual-conversation false positives. This file pins the casual cases:
-controls that MUST stay SAFE, plus a known colloquial-intensifier FP marked xfail
-(it FLAGs, not BLOCKs — a human-review trigger, see README). When the intensifier
-handling is made context-aware the xfail turns into an xpass and can be promoted.
+understates casual-conversation false positives. This file pins the casual cases as
+regressions: benign casual praise/slang must stay SAFE, and must never BLOCK.
 """
 from __future__ import annotations
 
@@ -32,22 +30,29 @@ def test_casual_benign_safe(t: str) -> None:
     assert _v(t) is Verdict.SAFE, t
 
 
-# Known limitation: the bare colloquial intensifier '존나' (= "really/very") flags as
-# TOXICITY even in clearly benign use. It FLAGs (review), never BLOCKs. Tracked for a
-# context-aware fix; pinned here so a future fix is detected (xpass) rather than silent.
-KNOWN_INTENSIFIER_FP = [
+# The colloquial intensifier '존나' (= "really/very") in clearly positive use is exempted
+# via a positive-sentiment carve-out (_TOX_INTENSIFIER_OK) so it stays SAFE. Toxic uses of
+# '존나' (with insults/attacks) are unaffected — see test_intensifier_toxic_still_flags.
+BENIGN_INTENSIFIER = [
     "존나 맛있다",
     "존나 좋아",
+    "존나 멋있어",
+    "존나 잘한다",
 ]
 
 
-@pytest.mark.xfail(reason="colloquial intensifier '존나' flags as TOXICITY (FLAG, not BLOCK); context-aware fix tracked", strict=False)
-@pytest.mark.parametrize("t", KNOWN_INTENSIFIER_FP)
-def test_intensifier_benign_should_be_safe(t: str) -> None:
+@pytest.mark.parametrize("t", BENIGN_INTENSIFIER)
+def test_intensifier_benign_safe(t: str) -> None:
     assert _v(t) is Verdict.SAFE, t
 
 
-# Whatever the verdict, the intensifier case must never reach BLOCK (review-only).
-@pytest.mark.parametrize("t", KNOWN_INTENSIFIER_FP)
-def test_intensifier_never_blocks(t: str) -> None:
-    assert _v(t) is not Verdict.BLOCK, t
+# Recall guard: the carve-out must NOT exempt '존나' in toxic/attack contexts.
+TOXIC_INTENSIFIER = [
+    "존나 머가리 굴려라",
+    "존나 사람갖고 노네",
+]
+
+
+@pytest.mark.parametrize("t", TOXIC_INTENSIFIER)
+def test_intensifier_toxic_still_flags(t: str) -> None:
+    assert _v(t) is not Verdict.SAFE, t
