@@ -29,6 +29,13 @@ _DUR_INGR_RE = re.compile("|".join(
     re.escape(i) for i in sorted(_DUR["ingredients"], key=len, reverse=True))
     or r"(?!x)x")  # 빈 목록이면 절대 매칭 안 되는 패턴
 _DUR_REC = re.compile(r"같이|함께|병용|동시|섞어|타서|드세요|드시|복용|곁들")
+# DUR 금기-문맥 가드 — 의약품 라벨/답변이 상호작용을 *경고·설명*하는 맥락('병용금기',
+# '상호작용', '함께 복용하면 안 되는 약', '병용 시 주의')은 병용 *권장*이 아니므로 제외.
+# _has_genuine_warning(동사 구조)이 못 잡는 명사형 금기 표기('병용금기', '안 되는 약')를 보강.
+_DUR_CONTRA = re.compile(
+    r"병용\s*금기|금기|상호작용|병용\s*(?:투여\s*)?(?:시|주의)|"
+    r"(?:함께|같이)?\s*(?:복용|드시|드세요|먹|투여|병용)(?:하면|할\s*경우|\s*시)?\s*안\s*(?:되|돼|됩)|"
+    r"안\s*되는\s*(?:약|성분|것)|피(?:해야|하세요|하십|하시는)|주의(?:가\s*필요|사항|해야|하세요)")
 
 # 섭취하면 위험한 독성/공업 물질
 _TOXIC = (
@@ -51,7 +58,7 @@ _TOXIC = (
     r"붕사|borax|과산화수소|hydrogen\s*peroxide"
 )
 # 약물 상호작용 룰용 어휘 — 술/약물군.
-_ALCOHOL = r"술|소주|맥주|와인|막걸리|위스키|음주|반주|한\s*잔"
+_ALCOHOL = r"술|소주|맥주|와인|막걸리|위스키|음주|반주"
 _RX = r"약|수면제|진정제|항생제|진통제|혈압약|당뇨약|항우울제|신경안정제|감기약"
 # 동일/동계열 중복 복용 위험 약물(NSAID·해열진통 계열 확장).
 _DUP_DRUGS = (r"타이레놀|게보린|펜잘|사리돈|아세트아미노펜|이부프로펜|나프록센|아스피린|"
@@ -452,7 +459,8 @@ def _v_dur(code: str, reason: str, matched: str) -> Violation:
 
 def _scan_dur_sentence(sentence: str) -> list[Violation]:
     """한 문장에 대한 DUR 판정. 경고 구조(부정 아닌)면 제외. 성분명 동시 등장 + 권고 동사."""
-    if _has_genuine_warning(sentence) or not _DUR_REC.search(sentence):
+    if (_has_genuine_warning(sentence) or _DUR_CONTRA.search(sentence)
+            or not _DUR_REC.search(sentence)):
         return []
     found = sorted(set(_DUR_INGR_RE.findall(sentence)))
     if not found:

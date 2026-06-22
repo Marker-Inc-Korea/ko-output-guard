@@ -53,6 +53,14 @@ _TOX_INTENSIFIER_OK = re.compile(
     r"존나(?=\s*(?:맛있|존맛|좋아|좋은|좋다|좋네|예쁘|이쁘|멋있|멋지|귀엽|훌륭|최고|대박|짱|꿀잼|"
     r"잘\s?하|잘한|잘했|재밌|재미있|행복|사랑|편하|편안|신나|쩐다|쩔))"
 )
+# 의료/제약명 FP 화이트리스트 — 약품·화학명에 욕설 어간이 우연히 박히는 경우만 lookaround 로
+# 어간(2글자)만 가린다(원문 span 보존). 트레'시바'(Tresiba), 센'시발'(노르트립틸린),
+# 세포페라'존나'트륨(cefoperazone), 씨티씨'바'이오, '정신병 신경'collapse→'병신경'. 실제 욕설
+# (시바/시발/존나/병신 + 같/아/새끼/짜증 …)은 이 lookaround 에 안 걸려 그대로 탐지된다.
+_TOX_MED_WHITELIST = re.compile(
+    r"(?<=트레)시바|(?<=센)시발|존나(?=트륨)|(?<=씨티)씨바|"
+    r"병신(?=경|생|부|장|체|호|진|약|선|증|우|동|문|뢰|규|용|음|착)"
+)
 # 전각/로마자/leet 우회(ｓｉｂａｌ→정규화→sibal, 영타 tlqkf, si8al/t1qkf 등). 대소문자 무시.
 # leet 치환(i→1, b→8, a→4/@, l→1)을 문자클래스로 흡수한다.
 _ROMAN_PROFANITY = re.compile(
@@ -171,7 +179,9 @@ def _mask_whitelist(s: str) -> str:
     """학술·중립어(始發點/始發驛/始發地)의 '시발' 만 동일 길이 토큰으로 가려 어간 오탐을 막는다.
     길이를 보존하므로 원문 기준 span(start/end)은 그대로 유효하고, 가려진 위치는 실제 욕설이
     아니라 매칭에 영향 없다. _TOX_WHITELIST 가 lookahead 한정이라 단일 패스로 O(n)."""
-    return _TOX_INTENSIFIER_OK.sub(_TOX_WHITELIST_MASK, _TOX_WHITELIST.sub(_TOX_WHITELIST_MASK, s))
+    return _TOX_MED_WHITELIST.sub(
+        _TOX_WHITELIST_MASK,
+        _TOX_INTENSIFIER_OK.sub(_TOX_WHITELIST_MASK, _TOX_WHITELIST.sub(_TOX_WHITELIST_MASK, s)))
 
 
 def scan_toxicity(text: str) -> list[Violation]:

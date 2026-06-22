@@ -101,7 +101,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **705개 전부 통과**(`pytest -q`).
+로컬 pytest **745개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -120,7 +120,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **705 passed** (0 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **745 passed** (0 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -256,6 +256,8 @@ HATE 전용 제3자 셋(번역 없음):
 → **클린 FPR 전 범주 ≤ 0.53%** (정밀도 우선 설계대로). recall 이 한 자릿수~10%대로 낮은 건 **결정론 Tier-1 의 의도된 특성**이다 — AI-Hub/unsmile 라벨은 경멸·암시·완곡·풍자까지 *전 스펙트럼*을 immoral 로 표시하는데, Tier-1 은 **명시적 슬러·노골적 행위/선동·불법 how-to** 만 verb-게이팅으로 잡는다. 나머지 의미·맥락 recall 은 **옵션 Tier-2 분류기** 영역이다(TOXICITY cascade 와 동일 구조로 주입 가능).
 
 > ⚠️ **ILLEGAL recall 0%(AI-Hub CRIME) 는 정의 불일치**다. AI-Hub `CRIME` 라벨은 "범죄를 *언급/논의*" 한 문장(예: 뉴스·후일담)인데, 본 검출기는 **불법 행위의 *실행 방법(how-to)* 조장**만 잡는다(예방·신고·뉴스 carve-out). 즉 두 정의가 다르며, how-to 합성 probe(랜섬웨어 제조·피싱사이트 제작·마약 합성·디도스·대포통장·SQLi 등)에는 전수 탐지된다(`tests/test_general_moderation.py`). 실사용 LLM 출력의 불법 how-to 라벨 코퍼스 기준 평가는 별도 필요.
+
+**식약처 의료 도메인 FP 하드닝 (2026-06).** 위 모더레이션·안전 검출기들을 **실제 식약처 RAG 코퍼스**(drug_permit 의약품 라벨 + HACCP 업체 레코드 50,815 청크 + Teacher LLM 생성 출력 20,914턴)에 돌려 의학 어휘 충돌 false-positive 를 잡아 고쳤다. 메커니즘: ⓐ substring 충돌(시바⊂트레**시바**[Tresiba]·존나⊂페라**존나**트륨[cefoperazone]·리신⊂알**리신**[allicin]·독소⊂메**독소**밀[medoxomil]·화형⊂친**화형**·니거⊂아**니거**나), ⓑ 의학어=시드(체위[體位성저혈압]·삽입[스텐트]·치사량[LD50]·홍어[생선/업체]), ⓒ 문맥(물 한 잔→술 오인, 병용금기/상호작용 = 병용 *권장* 아님, 국**제** 가이드라인→프롬프트 유출 오인). **결과: RAG 코퍼스 BLOCK 568→197(−65%), SEXUAL FP 379→2(−99%), TOXICITY 96→23**, 진짜 위반 탐지는 보존(과교정 0). 회귀 고정은 `tests/test_medical_domain_fp.py`. 단어경계·lookaround·문맥 carve-out 으로 처리했고 plain-text 욕설/위험권고 탐지는 불변.
 
 **외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out + MT proxy 로만 검증했다. SELF_HARM 을 vibhorag101(r/SuicideWatch, EN→KO MT proxy, n=400)에서 측정: **결정론 det recall 3.5%**(7/200) / FPR 0.5%, Tier-2 cascade 는 holdout 96.6% → **외부 46.5% 로 크게 deflate**. ⚠️ 이 proxy 는 **자살 ideation** 라벨인데 SELF_HARM 검출기는 *자해 방법/조장* 을 잡고 **ideation·위기 표현은 일부러 SAFE(위기개입 안내)** 로 두므로, 낮은 recall 은 상당 부분 라벨-정의 불일치 + 설계의도다(번역 의존도 추가). UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰 한계가 있어 **향후 분류기 보완을 계획**한다.
 
