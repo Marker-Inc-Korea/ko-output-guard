@@ -182,6 +182,31 @@ pip install -e .
 
 → **결정론(Tier-1)은 고-precision·저-recall** — precision **94~98%**(명시적 욕설/슬러만 고정밀로 잡고, recall 은 의미·맥락 혐오를 놓침). 의미 기반 recall 은 **옵션 Tier-2 분류기**가 보강한다: 권장 동작점 **thr=0.85 에서 recall 59~92% / precision 75.6~94.8%**. recall-최대점(thr=0.50: recall 76~94% / FPR 18~44% / precision 67.8~90.8%)부터 정밀-우선(thr=0.95)까지 전 구간 sweep 은 `eval/` 참조. toxicity cascade 는 BLOCK 이 아니라 **FLAG(human review)** 라 precision 우선 동작점이 적절하다.
 
+### Tier-2 분류기 — 배포 정책 & 재현 레시피
+
+- **기본은 deterministic-only.** 패키지는 Tier-1(룰)만으로 동작하며, ML·네트워크 의존이 없다. Tier-2 는 **선택**(`Guard(tier2={Category.TOXICITY: fn})`)이고 **bring-your-own-classifier** 다.
+- **레퍼런스 분류기 가중치는 레포에 포함하지 않는다** — (1) 크기, (2) 학습 데이터 smilegate unsmile 이 CC-BY-SA(share-alike) 라 파생 가중치 재배포에 라이선스 전파가 걸린다. 대신 아래 레시피로 **누구나 재현**할 수 있게 한다. 위 cascade 수치는 이 레퍼런스 분류기 기준이다.
+
+**재현 레시피 (위 표의 cascade 분류기):**
+
+| 항목 | 값 |
+|---|---|
+| base model | `klue/roberta-base` |
+| 학습 데이터 | smilegate `korean_unsmile_dataset` train (CC-BY-SA, 자동 다운로드) |
+| 라벨 | binary — `clean`=1 → 0(정상), 그 외 → 1(toxic) |
+| 하이퍼파라미터 | max_len 128 · batch 32 · epoch 2 · lr 2e-5 · fp16 |
+| valid 성능 | toxic recall **91.5%** / precision **90.9%** |
+| 권장 동작점 | threshold **0.85** (recall–precision 균형, 위 표) |
+
+```python
+# 학습 후, 분류기를 (str)->bool 로 감싸 주입한다.
+from ko_output_guard import Guard, Category
+clf = load_your_classifier(threshold=0.85)        # 위 레시피로 학습한 모델
+guard = Guard(tier2={Category.TOXICITY: lambda s: clf.is_toxic(s)})
+```
+
+> ⚠️ 레퍼런스 분류기는 unsmile 학습이라 **unsmile cascade 는 in-distribution**, APEACH/KMHAS/AIHub 가 held-out 이다(위 표 주). 운영 도메인에 맞춰 **재학습·threshold 재보정**을 권장한다.
+
 **개선 (2026-06).** 외부 데이터셋의 결정론 false-negative 를 분석해 TOXICITY 시드를 확장했다 — 모음늘임 정규화(`시바아아`→`시발`), 글자치환 변형(`싯발`/`씌발`/`샛기`), 초성ㅅ+완성 `발`, 음차 영어욕설, 인종·성소수자 멸칭. **기존 공개본 대비 Tier-1 det recall 이 전 데이터셋 상승**(unsmile 29.4→34.8%, APEACH 11.6→15.6%, KMHAS 20.4→29.2%, AIHub 2.0→3.2%)이면서 **FPR 은 거의 불변(±0.2%p 이내)**. 다만 의미·맥락 기반 혐오의 본격 recall 은 여전히 Tier-2 분류기가 주도한다 — 결정론은 명시적 욕설/멸칭의 high-precision fast-path 다.
 
 **SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). ⚠️ 단, "실제 유출된 벤더키"의 제3자 라벨 벤치마크가 공개돼 있지 않아 위 100%는 *형식 커버리지 기준*(third-party corpus 아님)임을 밝혀둔다.
