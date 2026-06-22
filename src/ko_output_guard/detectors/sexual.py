@@ -3,6 +3,10 @@
 명시적 케이스만 잡고, 의미·암시·신조어 recall 은 선택적 Tier-2 분류기에 위임한다(과탐 방지).
 의학·뉴스/판결 인용·교육·문학 인용 등은 문장 단위 carve-out 으로 SAFE 처리한다.
 seed/carve-out 은 design-general-moderation 워크플로 산출물을 외부셋으로 검증해 고정.
+
+히트는 ambiguous=True — 콘텐츠 모더레이션은 use-vs-mention(슬러 사용 vs 인용/교육)이 본질적
+으로 의미적이라, 룰(seed+carveout)은 근사일 뿐이고 Tier-2 모델 confirm 이 정확하다. 모델이
+없으면 기존대로 동작(메타데이터), block_unconfirmed_ambiguous=False 면 FLAG 강등.
 """
 from __future__ import annotations
 
@@ -70,5 +74,6 @@ def scan_sexual(text: str) -> list[Violation]:
             severity=Severity.HIGH,
             reason="moderation: sexual (deterministic Tier-1)",
             start=m.start(), end=m.end(), matched=m.group(0)[:60],
+            ambiguous=True,
         ))
     return out

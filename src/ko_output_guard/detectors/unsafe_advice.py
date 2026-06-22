@@ -453,8 +453,12 @@ _PATTERNS: list[tuple[re.Pattern[str], Severity, str]] = [
 
 
 def _v_dur(code: str, reason: str, matched: str) -> Violation:
+    # DUR 히트(병용금기 성분쌍/임부·연령금기)는 advice-vs-warning 이 의미적이라 ambiguous —
+    # 룰은 권고동사(_DUR_REC)+금기문맥부재(_DUR_CONTRA)로 근사하지만, 최종 판단은 모델 confirm
+    # 이 정확하다('같이 드세요'[위험권고] vs '병용 시 농도 상승'[정보/경고]).
     return Violation(code=code, category=Category.UNSAFE_ADVICE,
-                     severity=Severity.HIGH, reason=reason, matched=matched[:60])
+                     severity=Severity.HIGH, reason=reason, matched=matched[:60],
+                     ambiguous=True)
 
 
 def _scan_dur_sentence(sentence: str) -> list[Violation]:
@@ -516,6 +520,9 @@ def scan_unsafe_advice(text: str) -> list[Violation]:
                     start=m.start(),
                     end=m.end(),
                     matched=m.group(0)[:60],
+                    # false_cure(가짜 만병통치)는 주장-vs-반박이 의미적이라 ambiguous(모델 confirm).
+                    # 독성섭취·과량·상호작용 등 명시적 위험 지시는 certain 으로 둔다.
+                    ambiguous=(code == "false_cure"),
                 )
             )
     out += _scan_dur(text)

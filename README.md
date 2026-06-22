@@ -57,7 +57,9 @@ LLM이 **내놓은** 텍스트를 그대로 사용자에게 보내기 전에 한
 | `prompt_leak.scan_prompt_leak` | `PROMPT_LEAK` | (1) context(시스템 프롬프트)와 30자+ 연속 일치 또는 변별 규칙구 2개+ 재현 echo, (2) 1인칭 자기지침 노출 표지(한/영/일/중) |
 | `normalize.normalize_for_detection` | — | 한국어 검출기 전처리. `ko-prompt-guard` 있으면 강력 정규화 재사용, 없으면 경량 fallback(제로폭 제거 + 글자별 NFKC) |
 
-선택적 **Tier-2 cascade**: `Guard(tier2={...})` — 결정론이 비운 카테고리만 외부 분류기(LLM-judge/ML)로 보강(결정론이 잡으면 호출 생략 → fast-path 유지). 미설정이면 순수 결정론.
+선택적 **Tier-2 모델**: `Guard(tier2={cat: fn})` — `fn:(str)->bool`("이 텍스트에 진짜 {카테고리} 위반이 있나?")이 두 역할을 한다. **(1) VET(정밀)**: 결정론이 잡았으나 의미적 회색지대(`Violation.ambiguous=True`)인 히트를 confirm/deny → 모델이 부정하면 드롭(FP 제거), 확인하면 유지. **(2) RECALL**: 결정론이 못 잡은 카테고리 보강. **확실한(`ambiguous=False`) 히트는 모델을 호출하지 않는다(fast-path)** — SECRET/PII/명시적 위험은 형식이 결정적이라 vet 불필요. 콘텐츠 모더레이션(use-vs-mention)·DUR 권고(advice-vs-warning) 등 룰이 의미를 흉내내는 히트만 `ambiguous`.
+
+세 가지 모드: **① 순수 결정론**(`Guard()`, 모델 0개 — ambiguous 는 무동작) · **② 정밀-우선**(`GuardPolicy(block_unconfirmed_ambiguous=False)` — 모델 없이도 "확실만 BLOCK, 애매는 FLAG") · **③ 모델 보강**(`tier2=` — 애매는 모델이 vet+recall). 룰/모델 경계 설계는 [`docs/TIER_SPLIT.md`](./docs/TIER_SPLIT.md), 동작은 `tests/test_tier2_escalation.py`.
 
 ## 동작 방식
 
@@ -101,7 +103,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **764개 전부 통과**(`pytest -q`).
+로컬 pytest **775개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -120,7 +122,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **764 passed** (0 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **775 passed** (0 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 

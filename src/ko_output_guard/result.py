@@ -52,6 +52,12 @@ class Violation(BaseModel):
     start: int | None = None
     end: int | None = None
     matched: str | None = None
+    # 결정론 룰이 *확실*하게 잡았는지(certain), 의미적 회색지대라 모델 확인이 바람직한지
+    # (ambiguous). substring/형식(secret/pii/word-boundary)은 certain, 콘텐츠 모더레이션
+    # (use-vs-mention)·도메인 권고(advice-vs-warning)처럼 룰이 의미를 흉내내는 카브아웃에
+    # 의존하는 히트는 ambiguous=True 로 둔다. Guard 가 Tier-2 모델로 confirm/deny 한다.
+    # 모델이 없으면 기본은 무동작(메타데이터) — block_unconfirmed_ambiguous=False 면 FLAG 강등.
+    ambiguous: bool = False
 
 
 class GuardResult(BaseModel):

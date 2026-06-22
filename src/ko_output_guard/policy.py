@@ -33,6 +33,14 @@ class GuardPolicy(BaseModel):
     # PIIBackendUnavailable 예외를 던지고, False(기본)면 1회 WARN 로그 + GuardResult.degraded.
     strict: bool = False
 
+    # 모델(Tier-2) 확인 없이도 ambiguous 위반을 BLOCK 으로 인정할지.
+    #   True(기본): ambiguous 플래그는 모델이 있을 때만 작동하는 메타데이터 — 모델이 없으면
+    #     기존과 동일하게 BLOCK(결정론 floor 보존, 회귀 없음).
+    #   False(정밀-우선 모드): 모델 confirm 이 없는 ambiguous 히트는 BLOCK 하지 않고 FLAG 로
+    #     강등한다 — '확실한 것만 차단, 애매한 건 사람/모델 검토'. 모델이 확인한 ambiguous 와
+    #     certain 히트는 그대로 BLOCK. (SECRET/PII 등 certain 카테고리는 영향 없음.)
+    block_unconfirmed_ambiguous: bool = True
+
     # 이 카테고리 위반이 min_block_severity 이상이면 BLOCK, 아니면 FLAG.
     block_categories: frozenset[Category] = frozenset({
         Category.SECRET_LEAK,

@@ -96,14 +96,36 @@ class Guard:
         if p.detect_illegal:
             violations += detectors.scan_illegal(norm)
 
-        # Tier-2 cascade: 결정론이 비운 카테고리만 분류기로 보강(fast-path 유지).
+        # Tier-2 모델(LLM-judge/ML) — 두 역할을 한 분류기 인터페이스로 수행한다:
+        #   (1) VET(정밀): 결정론이 잡았으나 의미적 회색지대(ambiguous=True)인 히트를 confirm/
+        #       deny → 모델이 '아니다' 하면 드롭(FP 제거), '맞다' 하면 confirmed(=certain) 처리.
+        #   (2) RECALL: 결정론이 *못 잡은* 카테고리를 모델이 보강(기존 동작).
+        # certain 히트(SECRET/PII/명백한 위반)는 모델을 호출하지 않는다(fast-path). 카테고리당
+        # 모델 1회만 호출(probe 동일)하도록 캐시 — '텍스트에 진짜 {카테고리} 위반이 있는가?'.
         if self.tier2:
+            _verdict_cache: dict[Category, bool] = {}
+
+            def _model_says(cat: Category) -> bool:
+                if cat not in _verdict_cache:
+                    probe = text if cat in (Category.SECRET_LEAK, Category.PII_LEAK) else norm
+                    _verdict_cache[cat] = bool(self.tier2[cat](probe))
+                return _verdict_cache[cat]
+
+            vetted: list[Violation] = []
+            for v in violations:
+                if v.ambiguous and v.category in self.tier2:
+                    if _model_says(v.category):
+                        vetted.append(v.model_copy(update={"ambiguous": False}))  # confirmed→certain
+                    # else: 모델이 부정 → 드롭(FP 제거)
+                else:
+                    vetted.append(v)
+            violations = vetted
+
             covered = {v.category for v in violations}
-            for cat, clf in self.tier2.items():
+            for cat in self.tier2:
                 if cat in covered:
-                    continue  # 이미 결정론이 잡음 → 분류기 호출 생략(비용 절감)
-                probe = text if cat in (Category.SECRET_LEAK, Category.PII_LEAK) else norm
-                if clf(probe):
+                    continue  # 이미 (확인된) 결정론 히트가 있음 → recall 호출 불필요
+                if _model_says(cat):
                     violations.append(Violation(
                         code=f"{cat.value}:tier2",
                         category=cat,
@@ -111,10 +133,15 @@ class Guard:
                         reason="Tier-2 classifier flagged (deterministic was SAFE)",
                     ))
 
-        blocking = [
-            v for v in violations
-            if v.severity >= p.min_block_severity and v.category in p.block_categories
-        ]
+        def _can_block(v: Violation) -> bool:
+            if v.severity < p.min_block_severity or v.category not in p.block_categories:
+                return False
+            # 모델 미확인 ambiguous 는 정밀-우선 모드에서 BLOCK 하지 않고 FLAG 로 둔다.
+            if v.ambiguous and not p.block_unconfirmed_ambiguous:
+                return False
+            return True
+
+        blocking = [v for v in violations if _can_block(v)]
         if blocking:
             verdict = Verdict.BLOCK
         elif violations:
