@@ -101,7 +101,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **745개 전부 통과**(`pytest -q`).
+로컬 pytest **764개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -120,7 +120,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **745 passed** (0 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **764 passed** (0 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -259,7 +259,9 @@ HATE 전용 제3자 셋(번역 없음):
 
 **식약처 의료 도메인 FP 하드닝 (2026-06).** 위 모더레이션·안전 검출기들을 **실제 식약처 RAG 코퍼스**(drug_permit 의약품 라벨 + HACCP 업체 레코드 50,815 청크 + Teacher LLM 생성 출력 20,914턴)에 돌려 의학 어휘 충돌 false-positive 를 잡아 고쳤다. 메커니즘: ⓐ substring 충돌(시바⊂트레**시바**[Tresiba]·존나⊂페라**존나**트륨[cefoperazone]·리신⊂알**리신**[allicin]·독소⊂메**독소**밀[medoxomil]·화형⊂친**화형**·니거⊂아**니거**나), ⓑ 의학어=시드(체위[體位성저혈압]·삽입[스텐트]·치사량[LD50]·홍어[생선/업체]), ⓒ 문맥(물 한 잔→술 오인, 병용금기/상호작용 = 병용 *권장* 아님, 국**제** 가이드라인→프롬프트 유출 오인). **결과: RAG 코퍼스 BLOCK 568→197(−65%), SEXUAL FP 379→2(−99%), TOXICITY 96→23**, 진짜 위반 탐지는 보존(과교정 0). 회귀 고정은 `tests/test_medical_domain_fp.py`. 단어경계·lookaround·문맥 carve-out 으로 처리했고 plain-text 욕설/위험권고 탐지는 불변.
 
-추가로 **비정형 산문 코퍼스**(보도자료·공고·고시·리콜·가이드라인 210건 + 연구보고서 요약 1,876건)에서도 검증 — 한국어 산문은 harm 카테고리 FP **0**(정형 청크와 동일하게 하드닝 유지), 영문 산문에서 `3p`(3 phases) 충돌만 추가로 잡아 한국어 성적 문맥 게이팅으로 고침. 산문의 잔여 non-SAFE 는 거의 PII(URL·사업자번호 등 구조화 식별자)이며 이는 `ko-pii` 위임 영역이다.
+추가로 **비정형 산문 코퍼스**(보도자료·공고·고시·리콜·가이드라인 210건 + 연구보고서 요약 1,876건)에서도 검증 — 한국어 산문은 harm 카테고리 FP **0**(정형 청크와 동일하게 하드닝 유지), 영문 산문에서 `3p`(3 phases) 충돌만 추가로 잡아 한국어 성적 문맥 게이팅으로 고침.
+
+**PII 도메인 FP 필터 (2026-06).** 위 코퍼스에서 `pii_leak` 의 비식별/구조화/공개 라벨 FP ~5,000건(IP=의약품코드/버전번호 2,464·WEIGHT/HEIGHT=임상수치·POSTAL_CODE=표 코드·DT_BIRTH=허가/시험일·NATIONALITY=한국·URL=공개 mfds 주소·EDUCATION/POSITION=속성·15XX/16XX 대표번호=공개 고객센터)를 **ko-pii 무수정**으로 가드측 `_EXCLUDE`(detect_all 라벨 제외) + 대표번호 형식 필터로 억제. **결과: pii_leak 위반 5,368→334(−94%)**, 결정적 식별 PII(RRN·CARD·PHONE·EMAIL·PASSPORT·사업자번호)는 그대로 탐지(과교정 0, `tests/test_pii_domain_fp.py`). 비식별 속성을 누출로 보지 않는 설계 선택이며, 강식별 조합(이름+RRN)의 RRN 신호는 보존된다.
 
 **외부 벤치마크 부재 영역 (정직한 한계):** SELF_HARM·PROMPT_LEAK 은 한국어 외부 데이터셋이 없어 내부 held-out + MT proxy 로만 검증했다. SELF_HARM 을 vibhorag101(r/SuicideWatch, EN→KO MT proxy, n=400)에서 측정: **결정론 det recall 3.5%**(7/200) / FPR 0.5%, Tier-2 cascade 는 holdout 96.6% → **외부 46.5% 로 크게 deflate**. ⚠️ 이 proxy 는 **자살 ideation** 라벨인데 SELF_HARM 검출기는 *자해 방법/조장* 을 잡고 **ideation·위기 표현은 일부러 SAFE(위기개입 안내)** 로 두므로, 낮은 recall 은 상당 부분 라벨-정의 불일치 + 설계의도다(번역 의존도 추가). UNSAFE_ADVICE(식약처 위험권고)는 도메인 특수로 제3자 벤치가 없다. 이 영역은 룰 한계가 있어 **향후 분류기 보완을 계획**한다.
 

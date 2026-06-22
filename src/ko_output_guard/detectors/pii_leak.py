@@ -46,12 +46,27 @@ _STRIP_CHARS = frozenset(" \t\n\r,;_，；＿")
 # 출력 가드에서 제외하는 ko-pii 라벨. PERSON/ADDRESS/PERSONAL_ATTR 은 성씨-시작
 # 일반명사 오탐이 잦고, MAJOR(전공)은 '의학/약학/화학', AGE('두 살')는 맥락 의존
 # 일반표현이라 단독으로는 식별이 안 되므로 결정적 PII(RRN/카드/전화/이메일/사업자)만 본다.
-_EXCLUDE = {"PERSON", "ADDRESS", "PERSONAL_ATTR", "MAJOR", "AGE"}
+#
+# 추가 제외(2026-06) — 비식별 속성 + 구조화-데이터 충돌 + 공개 식별자. 실 식약처 코퍼스
+# (qtaoa 출력 2만 + drug_permit RAG 청크 2만 + 비정형 산문)에서 ~5,000건 FP 확인, 전부
+# 비식별/공개라 '출력 누출'로 보지 않는다(결정적 식별 PII 는 그대로 본다):
+#   IP(2.113.111.4=의약품 코드/버전번호)·WEIGHT(60kg)·HEIGHT(1.73m)·POSTAL_CODE(25‑100=
+#   표 코드, 우편번호 아님)·NATIONALITY(한국)·URL(공개 mfds.go.kr 주소)·EDUCATION(기관명)·
+#   POSITION(직함 '약사')·DT_BIRTH(허가일/시험일 = 생일 아님; 생일 단독은 약(弱)식별이라
+#   도메인상 제외 — 이름+RRN 조합의 강한 신호는 RRN/PERSON 경로가 별도로 본다).
+_EXCLUDE = {
+    "PERSON", "ADDRESS", "PERSONAL_ATTR", "MAJOR", "AGE",
+    "IP", "WEIGHT", "HEIGHT", "POSTAL_CODE", "NATIONALITY", "URL",
+    "EDUCATION", "POSITION", "DT_BIRTH",
+}
 
 # 비-개인 번호 맥락 — 운송장/주문/팩스 등은 전화 형식이어도 개인정보가 아니다.
 _NONPERSONAL_NUM_CTX = re.compile(
     r"운송장|송장|주문\s*번호|택배|등기|배송\s*번호|상품\s*코드|일련\s*번호|"
     r"팩스|대표\s*(?:번호|전화)|고객\s*센터")
+# 전국 대표번호(15XX/16XX/18XX + 4자리, 8자리) — 기업 고객센터 공개번호라 개인정보 아님.
+# 식약처 코퍼스의 phone FP 대부분(1661‑XXXX 등 e약은요/허가 상담번호). 010/02 등 실번호는 미해당.
+_DAEPYO_NUM = re.compile(r"^1[5-9][0-9]{2}[0-9]{4}$")
 
 # 할루시네이션 카드번호 보강 — ko-pii CARD 는 Luhn+BIN 을 강제하므로, LLM 이 지어낸
 # (체크섬 무효) 카드번호는 통과한다. '카드번호/신용카드/credit card' 같은 카드 맥락
@@ -504,8 +519,11 @@ def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
         # 연결 문자열 내부의 '이메일'은 실제로는 호스트이므로 제외(과탐 방지).
         if d.label == "EMAIL" and any(s <= d.start < e for s, e in conn_spans):
             continue
-        # 운송장/주문/팩스 등 비-개인 번호 맥락의 '전화'는 제외.
-        if d.label == "PHONE" and _NONPERSONAL_NUM_CTX.search(text[max(0, d.start - 12):d.start]):
+        # 운송장/주문/팩스 등 비-개인 번호 맥락의 '전화', 전국 대표번호(15XX/16XX/18XX)는 제외.
+        if d.label == "PHONE" and (
+            _NONPERSONAL_NUM_CTX.search(text[max(0, d.start - 12):d.start])
+            or _DAEPYO_NUM.match(re.sub(r"[\s\-]", "", d.text))
+        ):
             continue
         kopii_spans.append((d.start, d.end))
         risk = getattr(getattr(d, "risk_level", None), "name", "MEDIUM")
