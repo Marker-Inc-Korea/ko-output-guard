@@ -24,6 +24,10 @@ class Category(str, Enum):
     WEAPONS = "weapons"              # 무기/폭발물 제조 안내
     TOXICITY = "toxicity"            # 욕설/혐오/유해 표현
     PROMPT_LEAK = "prompt_leak"      # 시스템 프롬프트/지침 그대로 출력
+    SEXUAL = "sexual"                # 노골적 성행위·성적 알선 (미성년 시 CSAM)
+    VIOLENCE = "violence"            # 살해·폭행 위협/조장, 유혈·잔혹 묘사
+    HATE = "hate"                    # 보호집단 비인간화·차별 선동·괴롭힘
+    ILLEGAL = "illegal"              # 해킹·피싱·사기·마약·절도 등 범죄 조장
 
 
 class Severity(int, Enum):

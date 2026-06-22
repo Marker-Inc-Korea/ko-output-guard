@@ -6,7 +6,12 @@ from .self_harm import scan_self_harm
 from .toxicity import scan_toxicity
 from .unsafe_advice import scan_unsafe_advice
 from .weapons import scan_weapons
+from .sexual import scan_sexual
+from .violence import scan_violence
+from .hate import scan_hate
+from .illegal import scan_illegal
 
 __all__ = ["scan_secrets", "scan_pii_leak", "scan_unsafe_advice",
            "scan_self_harm", "scan_weapons", "scan_toxicity", "scan_prompt_leak",
+           "scan_sexual", "scan_violence", "scan_hate", "scan_illegal",
            "pii_backend_available", "PIIBackendUnavailable"]

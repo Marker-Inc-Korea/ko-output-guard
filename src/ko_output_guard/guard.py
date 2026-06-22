@@ -87,6 +87,14 @@ class Guard:
             violations += detectors.scan_toxicity(norm)
         if p.detect_prompt_leak:
             violations += detectors.scan_prompt_leak(norm, context)
+        if p.detect_sexual:
+            violations += detectors.scan_sexual(norm)
+        if p.detect_violence:
+            violations += detectors.scan_violence(norm)
+        if p.detect_hate:
+            violations += detectors.scan_hate(norm)
+        if p.detect_illegal:
+            violations += detectors.scan_illegal(norm)
 
         # Tier-2 cascade: 결정론이 비운 카테고리만 분류기로 보강(fast-path 유지).
         if self.tier2:
