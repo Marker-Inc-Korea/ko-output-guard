@@ -23,6 +23,8 @@ dependencies = ["pydantic>=2.0"]
 [project.optional-dependencies]
 pii = ["ko-pii>=1.15"]
 normalize = ["ko-prompt-guard>=0.1"]  # 난독 출력 정규화(없으면 경량 fallback)
+# Opt-in Tier-2: EmbeddingTier2 기본 bge-m3 백엔드. 코어는 ML-free(인코더 주입 가능).
+embedding = ["torch>=2.0", "transformers>=4.40"]
 dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
 
 [tool.setuptools.packages.find]

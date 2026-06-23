@@ -14,10 +14,20 @@ from .detectors import PIIBackendUnavailable, pii_backend_available
 from .guard import Guard, check
 from .policy import GuardPolicy
 from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Violation
+# Opt-in Tier-2 reviewer (ML-free at import; bge-m3 backend imported lazily).
+from .reviewers import (
+    ClassifierTier2,
+    EmbeddingTier2,
+    default_hate_anchors,
+    make_bge_encoder,
+    make_hate_tier2,
+)
 
 __version__ = "0.1.0"
 __all__ = [
     "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
     "Verdict", "Category", "Severity", "Violation",
     "PIIBackendUnavailable", "pii_backend_available",
+    "EmbeddingTier2", "ClassifierTier2", "make_hate_tier2", "make_bge_encoder",
+    "default_hate_anchors",
 ]

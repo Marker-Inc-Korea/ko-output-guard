@@ -103,7 +103,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **775개 전부 통과**(`pytest -q`).
+로컬 pytest **783개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -122,7 +122,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **775 passed** (0 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **783 passed** (1 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -232,6 +232,36 @@ guard = Guard(tier2={Category.TOXICITY: lambda s: clf.is_toxic(s)})
 > ⚠️ 레퍼런스 분류기는 unsmile 학습이라 **unsmile cascade 는 in-distribution**, APEACH/KMHAS/AIHub 가 held-out 이다(위 표 주). 운영 도메인에 맞춰 **재학습·threshold 재보정**을 권장한다.
 
 **개선 (2026-06).** 외부 데이터셋의 결정론 false-negative 를 분석해 TOXICITY 시드를 확장했다 — 모음늘임 정규화(`시바아아`→`시발`), 글자치환 변형(`싯발`/`씌발`/`샛기`), 초성ㅅ+완성 `발`, 음차 영어욕설, 인종·성소수자 멸칭. **기존 공개본 대비 Tier-1 det recall 이 전 데이터셋 상승**(unsmile 29.4→34.8%, APEACH 11.6→15.6%, KMHAS 20.4→29.2%, AIHub 2.0→3.2%)이면서 **FPR 은 거의 불변(±0.2%p 이내)**. 다만 의미·맥락 기반 혐오의 본격 recall 은 여전히 Tier-2 분류기가 주도한다 — 결정론은 명시적 욕설/멸칭의 high-precision fast-path 다.
+
+### HATE Tier-2 — 왜 임베딩이 아니라 *분류기* 인가 (실측, 2026-06)
+
+같은 Tier-2 훅(`Guard(tier2={Category.HATE: fn})`, `fn:(str)->bool`)에 무엇을 꽂을지 KMHAS(held-out, 250 hate/250 not)에서 비교했다. 패키지는 두 reviewer 를 동봉한다(가중치 미포함, bring-your-own):
+
+| Tier-2 | recall | FPR | 판정 |
+|---|---:|---:|---|
+| 룰-only (결정론) | 17.2% | 0.40% | 명시 슬러/선동만 |
+| `EmbeddingTier2` (bge-m3 ↔ hate 앵커) | 48% | **22%** | ❌ 임베딩은 *주제* 를 잡지 *입장/의도* 를 못 가른다 — "외국인" 정상문장과 혐오문장이 임베딩 이웃이라 recall↑ 시 FPR 폭증 |
+| 기존 TOXICITY 분류기 전용 | 94% | **44%** | ❌ toxicity≠hate — 욕설-only 도 hate 로 오인 |
+| **`ClassifierTier2` (HATE 전용 학습)** | **56~64%** | 10~18% | ✅ cross-dataset KMHAS |
+| 〃 (in-distribution, unsmile valid) | **90.8%** | precision 87.9% | ✅ |
+
+→ **HATE/TOXICITY 처럼 *같은 주제의 정상·혐오가 임베딩 이웃* 인 카테고리는 학습 분류기가 맞다.** 임베딩-유사도는 injection 처럼 공격 *구조* 가 분리되는 카테고리에만 권장(ko-prompt-guard `EmbeddingReviewer` 는 룰 17→91%). HATE 분류기는 cross-dataset(KMHAS) 에서 FPR 이 10~18% 로 in-distribution(unsmile) 보다 높다 — 운영 도메인 재학습·threshold 재보정 필요. `EmbeddingTier2` 는 도구로 동봉하되 HATE 기본은 `ClassifierTier2` 를 권장한다.
+
+**HATE 분류기 재현 레시피** (위 TOXICITY 레시피와 동일 base, 라벨만 변경):
+
+| 항목 | 값 |
+|---|---|
+| base / 데이터 | `klue/roberta-base` · smilegate unsmile train |
+| 라벨 | **보호집단 혐오 카테고리(여성/가족·남성·성소수자·인종/국적·연령·지역·종교·기타혐오)==1 → 1, 그 외(clean OR 악플/욕설-only) → 0** (욕설-only 를 negative 로 둬 toxicity≠hate 학습) |
+| 하이퍼파라미터 | max_len 128 · batch 32 · epoch 3 · lr 2e-5 · fp16 |
+| valid(unsmile) | hate recall **90.8%** / precision **87.9%** |
+
+```python
+from ko_output_guard import Guard, Category, ClassifierTier2
+clf = ClassifierTier2("path/to/hate_model", threshold=0.7)   # 위 레시피로 학습
+guard = Guard(tier2={Category.HATE: clf})    # VET(ambiguous hate FP 제거) + RECALL(암시 hate)
+# 임베딩-sim 패턴(공격 구조 분리 카테고리용): from ko_output_guard import make_hate_tier2
+```
 
 **SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). 제3자(**TruffleHog**) secret 정규식 **762종** 형식에서 ko 탐지 **80.2%**(598/746 — 패턴별 라벨드 샘플 합성). ⚠️ 두 수치 모두 *형식 커버리지*다: 25/25 는 자가형식, TruffleHog 80%는 제3자-정의 형식이나 **샘플을 패턴에서 합성**(라벨드 `kw=token` 형태 → ko 일반규칙과 정합)한 것이라 다소 낙관적이고, **실제 유출(wild-leak) 라벨 코퍼스 기준이 아니다**(SecretBench 같은 wild 코퍼스는 별도 필요).
 
