@@ -109,3 +109,18 @@ def test_precision_first_with_model_confirm_blocks() -> None:
     g = Guard(GuardPolicy(block_unconfirmed_ambiguous=False),
               tier2={Category.HATE: _yes})
     assert g.check(HATE).verdict is Verdict.BLOCK  # 모델 confirm → certain 화 → BLOCK
+
+
+# --- (8) tier2_vet=False: 분류기는 룰 히트를 드롭하지 않고 RECALL 만 -------------------
+def test_tier2_vet_false_keeps_rule_hit_on_deny() -> None:
+    # vet=True(기본): 모델 deny → ambiguous hate 드롭 → SAFE
+    assert Guard(tier2={Category.HATE: _no}).check(HATE).verdict is Verdict.SAFE
+    # vet=False: 분류기가 deny 해도 룰 히트 보존 → BLOCK
+    g = Guard(GuardPolicy(tier2_vet=False), tier2={Category.HATE: _no})
+    assert g.check(HATE).verdict is Verdict.BLOCK
+
+
+def test_tier2_vet_false_still_does_recall() -> None:
+    g = Guard(GuardPolicy(tier2_vet=False), tier2={Category.TOXICITY: _yes})
+    r = g.check("아주 평범하고 안전한 안내 문장입니다")
+    assert any(v.code == "toxicity:tier2" for v in r.violations)  # RECALL 은 그대로

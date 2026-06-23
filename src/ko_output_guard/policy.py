@@ -41,6 +41,14 @@ class GuardPolicy(BaseModel):
     #     certain 히트는 그대로 BLOCK. (SECRET/PII 등 certain 카테고리는 영향 없음.)
     block_unconfirmed_ambiguous: bool = True
 
+    # Tier-2 모델이 ambiguous 룰 히트를 VET(confirm/deny)할지.
+    #   True(기본): 모델이 ambiguous 히트를 부정하면 드롭(FP 제거). 모델이 해당 카테고리에
+    #     *룰보다 신뢰도 높을* 때만 안전하다.
+    #   False(RECALL-only): 모델은 룰이 *못 잡은* 카테고리만 보강하고, 룰 히트는 절대 드롭하지
+    #     않는다. 분류기가 룰의 일부 형태(예: 콘텐츠 학습 분류기 ↔ 요청형 룰 히트)에 blind 일 때
+    #     **룰의 고정밀 정탐을 모델이 잘못 기각하는 것을 막는다**(프로덕션 권장).
+    tier2_vet: bool = True
+
     # 이 카테고리 위반이 min_block_severity 이상이면 BLOCK, 아니면 FLAG.
     block_categories: frozenset[Category] = frozenset({
         Category.SECRET_LEAK,

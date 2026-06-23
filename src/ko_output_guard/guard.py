@@ -111,15 +111,17 @@ class Guard:
                     _verdict_cache[cat] = bool(self.tier2[cat](probe))
                 return _verdict_cache[cat]
 
-            vetted: list[Violation] = []
-            for v in violations:
-                if v.ambiguous and v.category in self.tier2:
-                    if _model_says(v.category):
-                        vetted.append(v.model_copy(update={"ambiguous": False}))  # confirmed→certain
-                    # else: 모델이 부정 → 드롭(FP 제거)
-                else:
-                    vetted.append(v)
-            violations = vetted
+            if p.tier2_vet:
+                vetted: list[Violation] = []
+                for v in violations:
+                    if v.ambiguous and v.category in self.tier2:
+                        if _model_says(v.category):
+                            vetted.append(v.model_copy(update={"ambiguous": False}))  # confirmed→certain
+                        # else: 모델이 부정 → 드롭(FP 제거)
+                    else:
+                        vetted.append(v)
+                violations = vetted
+            # tier2_vet=False: 룰 히트는 그대로 두고(분류기가 잘못 기각 못 하게) RECALL 만.
 
             covered = {v.category for v in violations}
             for cat in self.tier2:

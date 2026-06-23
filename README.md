@@ -103,7 +103,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **783개 전부 통과**(`pytest -q`).
+로컬 pytest **785개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -122,7 +122,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **783 passed** (1 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **785 passed** (1 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -272,6 +272,28 @@ guard = Guard(tier2={Category.HATE: clf})    # VET(ambiguous hate FP 제거) + R
 | 0.9 | 55.2% | 9.6% | 0.00% |
 
 → thr 0.8 에서 **실배포 의료 텍스트 FP 는 0.05%(2,000건 중 1건)**, 진짜 혐오 발생 시 recall 56.8%(룰 17% 대비 3.3×). Tier-2 RECALL 추가분은 MEDIUM=**FLAG(사람 검토)** 라 자동 BLOCK 이 아니어서 FP 부담이 더 낮다. end-to-end 검증(실제 hate_model@0.8): 명시 슬러/선동 → BLOCK(룰+confirm), **암시 혐오('외국인은 다 게으르고 더러워', 룰 미탐) → FLAG(`hate:tier2`, prob 0.997)**, benign 의료·인권옹호('장애인 차별 없애야', prob 0.25)·뉴스 → SAFE. cross-domain 배포 시 자체 도메인 데이터로 thr 재보정 권장.
+
+**다른 모더레이션 카테고리 — SEXUAL / VIOLENCE / TOXICITY 분류기.** 같은 패턴(`ClassifierTier2`)으로 학습·배선. SEXUAL/VIOLENCE 는 AI-Hub 147 윤리검증(대화 단위 80/20 split, 카테고리-특정 라벨=해당 type vs clean+다른 immoral), TOXICITY 는 unsmile(기존 cascade). 배포 thr 은 의료 도메인 FPR 로:
+
+| 카테고리 | 모델 | thr | 의료 FPR | held-out recall |
+|---|---|---:|---:|---|
+| SEXUAL | klue/roberta·AI-Hub | 0.8 | 0.10% | 50.3%(AI-Hub conv) |
+| VIOLENCE | klue/roberta·AI-Hub | 0.8 | 0.00% | 59.7%(AI-Hub conv) |
+| TOXICITY | klue/roberta·unsmile | 0.85 | 0.00% | 91.6%(unsmile) |
+
+→ **분류기는 *생성된 콘텐츠*(서술·위협)를 잡고, 룰은 키워드/요청형을 잡아 상보적**이다 — 실측: 서술 콘텐츠("벗은 몸 만지며 성관계 0.99"·"칼로 찔러 피 솟구쳐 0.97")는 분류기가, 요청형("성관계 묘사해줘 0.21")은 룰이. AI-Hub conv recall(50~60%)이 HATE/TOXICITY 보다 낮은 건 AI-Hub-only(별도 train 셋 부재)·희소 positive·요청형 blind 때문이고, 명백한 콘텐츠는 0.97+ 로 잡는다. ILLEGAL(CRIME=언급≠how-to)·UNSAFE_ADVICE(식약처 특화 데이터 없음)·SELF_HARM(vibhorag EN→KO ideation, 라벨 불일치)은 분류기 미배선 → 룰 + 향후 LLM-judge. 레시피 `eval/train_hate_tier2.py`(HATE)·`eval/train_aihub_cat.py`(SEXUAL/VIOLENCE).
+
+> ⚠️ **`GuardPolicy(tier2_vet=False)` 권장(분류기 배선 시).** 콘텐츠-학습 분류기는 요청형 룰 히트에 blind 라, VET(룰 히트 confirm/deny) 를 켜면 룰의 고정밀 정탐을 잘못 기각할 수 있다(예: '성관계 묘사해줘' 룰 BLOCK 을 분류기 0.21 이 드롭). `tier2_vet=False` 면 분류기는 *룰이 못 잡은* 콘텐츠만 RECALL 보강하고 룰 정탐은 보존한다.
+
+```python
+from ko_output_guard import Guard, GuardPolicy, Category, ClassifierTier2
+GUARD = Guard(GuardPolicy(tier2_vet=False), tier2={
+    Category.HATE:     ClassifierTier2("hate_model",     threshold=0.80),
+    Category.SEXUAL:   ClassifierTier2("sexual_model",   threshold=0.80),
+    Category.VIOLENCE: ClassifierTier2("violence_model", threshold=0.80),
+    Category.TOXICITY: ClassifierTier2("tox_model",      threshold=0.85),
+})
+```
 
 **SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). 제3자(**TruffleHog**) secret 정규식 **762종** 형식에서 ko 탐지 **80.2%**(598/746 — 패턴별 라벨드 샘플 합성). ⚠️ 두 수치 모두 *형식 커버리지*다: 25/25 는 자가형식, TruffleHog 80%는 제3자-정의 형식이나 **샘플을 패턴에서 합성**(라벨드 `kw=token` 형태 → ko 일반규칙과 정합)한 것이라 다소 낙관적이고, **실제 유출(wild-leak) 라벨 코퍼스 기준이 아니다**(SecretBench 같은 wild 코퍼스는 별도 필요).
 
