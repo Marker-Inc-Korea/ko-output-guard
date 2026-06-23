@@ -258,10 +258,20 @@ guard = Guard(tier2={Category.TOXICITY: lambda s: clf.is_toxic(s)})
 
 ```python
 from ko_output_guard import Guard, Category, ClassifierTier2
-clf = ClassifierTier2("path/to/hate_model", threshold=0.7)   # 위 레시피로 학습
+clf = ClassifierTier2("path/to/hate_model", threshold=0.8)   # production 권장 thr (아래)
 guard = Guard(tier2={Category.HATE: clf})    # VET(ambiguous hate FP 제거) + RECALL(암시 hate)
 # 임베딩-sim 패턴(공격 구조 분리 카테고리용): from ko_output_guard import make_hate_tier2
 ```
+
+**production threshold = 0.8 (권장).** threshold 는 KMHAS(소셜미디어 혐오 벤치)가 아니라 **실배포 도메인 FPR** 로 정한다 — KMHAS '정상' 은 경계성/공격적 콘텐츠를 포함해 FPR 이 과장되기 때문이다. 식약처 의료 출력(qtaoa 2,000건)에서의 실측 FPR 로 보면:
+
+| thr | KMHAS recall | KMHAS FPR | **식약처 의료 FPR** |
+|---:|---:|---:|---:|
+| 0.7 | 59.2% | 15.6% | 0.10% |
+| **0.8** | **56.8%** | 13.2% | **0.05%** |
+| 0.9 | 55.2% | 9.6% | 0.00% |
+
+→ thr 0.8 에서 **실배포 의료 텍스트 FP 는 0.05%(2,000건 중 1건)**, 진짜 혐오 발생 시 recall 56.8%(룰 17% 대비 3.3×). Tier-2 RECALL 추가분은 MEDIUM=**FLAG(사람 검토)** 라 자동 BLOCK 이 아니어서 FP 부담이 더 낮다. end-to-end 검증(실제 hate_model@0.8): 명시 슬러/선동 → BLOCK(룰+confirm), **암시 혐오('외국인은 다 게으르고 더러워', 룰 미탐) → FLAG(`hate:tier2`, prob 0.997)**, benign 의료·인권옹호('장애인 차별 없애야', prob 0.25)·뉴스 → SAFE. cross-domain 배포 시 자체 도메인 데이터로 thr 재보정 권장.
 
 **SECRET** — 벤더 형식(AWS/GitHub/Stripe/JWT 등) **25/25** 탐지(format-canonical 재확인), 정상 코드(code_search_net/the-stack) **BLOCK 오탐 0.25~1%**(code_search_net 0.25% · the-stack 1.0%; fire 율은 더 높으나 대부분 FLAG). 제3자(**TruffleHog**) secret 정규식 **762종** 형식에서 ko 탐지 **80.2%**(598/746 — 패턴별 라벨드 샘플 합성). ⚠️ 두 수치 모두 *형식 커버리지*다: 25/25 는 자가형식, TruffleHog 80%는 제3자-정의 형식이나 **샘플을 패턴에서 합성**(라벨드 `kw=token` 형태 → ko 일반규칙과 정합)한 것이라 다소 낙관적이고, **실제 유출(wild-leak) 라벨 코퍼스 기준이 아니다**(SecretBench 같은 wild 코퍼스는 별도 필요).
 
