@@ -142,6 +142,54 @@ class ClassifierTier2:
         return self.prob(text) > self.threshold
 
 
+class MultiLabelClassifierTier2:
+    """**한 개의 multi-label HF 분류기를 여러 카테고리에서 공유** — N개 카테고리에 N개 모델을
+    띄우는 대신 1개로(서빙 메모리·지연 N배 절감). ``.for_label(index, threshold)`` 가 카테고리별
+    ``(str)->bool`` confirmer 를 돌려준다. 같은 텍스트의 forward 는 **1회만**(마지막 텍스트 캐시)
+    이라 Guard.check() 가 카테고리마다 confirmer 를 호출해도 모델은 텍스트당 한 번만 돈다.
+
+    실측(README): 4범주를 한 모델로 합쳐도 per-category 성능이 분리 모델과 거의 같다. 데이터셋이
+    카테고리별로 다르면 masked multi-label 로 통합 학습(`eval/train_unified.py`).
+    """
+
+    def __init__(self, model_dir: str, *, max_length: int = 256, device: str | None = None) -> None:
+        try:
+            import torch
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        except ImportError as e:  # pragma: no cover
+            raise ImportError(
+                "MultiLabelClassifierTier2 needs torch+transformers: pip install ko-output-guard[embedding]."
+            ) from e
+        self._torch = torch
+        self.max_length = max_length
+        self._dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self._tok = AutoTokenizer.from_pretrained(model_dir)
+        self._net = AutoModelForSequenceClassification.from_pretrained(model_dir).eval().to(self._dev)
+        self._cache_text: str | None = None
+        self._cache_probs: list[float] = []
+
+    def probs(self, text: str) -> list[float]:
+        """카테고리별 sigmoid 확률 리스트. 같은 텍스트면 캐시(텍스트당 forward 1회)."""
+        if not isinstance(text, str) or not text.strip():
+            return []
+        if text == self._cache_text:
+            return self._cache_probs
+        torch = self._torch
+        with torch.no_grad():
+            enc = self._tok(text, truncation=True, max_length=self.max_length,
+                            return_tensors="pt").to(self._dev)
+            p = torch.sigmoid(self._net(**enc).logits[0]).cpu().tolist()
+        self._cache_text, self._cache_probs = text, p
+        return p
+
+    def for_label(self, index: int, threshold: float = 0.5) -> Callable[[str], bool]:
+        """카테고리(라벨 인덱스)용 ``(str)->bool`` → ``Guard(tier2={cat: ml.for_label(i)})``."""
+        def confirm(text: str) -> bool:
+            p = self.probs(text)
+            return bool(p) and index < len(p) and p[index] > threshold
+        return confirm
+
+
 # LLM-judge 기본 프롬프트 — 라벨 데이터가 없거나(SELF_HARM/UNSAFE_ADVICE) 정의가 애매한
 # 카테고리용. 배포 LLM(Gemma/Solar 등)에 "예/아니오"로 물어 (str)->bool 로 만든다.
 JUDGE_PROMPTS: dict[str, str] = {

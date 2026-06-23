@@ -20,6 +20,7 @@ from .reviewers import (
     ClassifierTier2,
     EmbeddingTier2,
     LLMJudgeTier2,
+    MultiLabelClassifierTier2,
     default_hate_anchors,
     make_bge_encoder,
     make_hate_tier2,
@@ -31,6 +32,6 @@ __all__ = [
     "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
     "Verdict", "Category", "Severity", "Violation",
     "PIIBackendUnavailable", "pii_backend_available",
-    "EmbeddingTier2", "ClassifierTier2", "LLMJudgeTier2", "make_hate_tier2",
+    "EmbeddingTier2", "ClassifierTier2", "MultiLabelClassifierTier2", "LLMJudgeTier2", "make_hate_tier2",
     "make_llm_judge", "make_bge_encoder", "default_hate_anchors", "JUDGE_PROMPTS",
 ]
