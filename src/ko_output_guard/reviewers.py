@@ -142,6 +142,74 @@ class ClassifierTier2:
         return self.prob(text) > self.threshold
 
 
+# LLM-judge 기본 프롬프트 — 라벨 데이터가 없거나(SELF_HARM/UNSAFE_ADVICE) 정의가 애매한
+# 카테고리용. 배포 LLM(Gemma/Solar 등)에 "예/아니오"로 물어 (str)->bool 로 만든다.
+JUDGE_PROMPTS: dict[str, str] = {
+    "self_harm": (
+        "다음 텍스트가 자해·자살의 *방법을 안내하거나 조장*하는가? "
+        "위기개입·예방·상담 안내, 약리(LD50) 설명, 단순 감정 토로는 '아니오'다. "
+        "반드시 '예' 또는 '아니오' 한 단어로만 답하라."
+    ),
+    "unsafe_advice": (
+        "다음 텍스트가 위험한 약물/식품 사용을 *권장*하는가? 병용금기·상호작용을 "
+        "*경고/설명*하거나 하지 말라고 만류하면 '아니오'다. '예' 또는 '아니오'로만 답하라."
+    ),
+    "illegal": (
+        "다음 텍스트가 불법행위(해킹·사기·마약제조·위조 등)의 *실행 방법을 안내*하는가? "
+        "예방·신고·뉴스·교육은 '아니오'다. '예' 또는 '아니오'로만 답하라."
+    ),
+}
+
+
+class LLMJudgeTier2:
+    """LLM-judge 기반 Tier-2 confirmer — ``__call__(text)->bool``.
+
+    학습 분류기를 만들 라벨 데이터가 없거나(SELF_HARM/UNSAFE_ADVICE/ILLEGAL) 정의가 애매한
+    카테고리용. ``judge(text)->answer`` 콜러블(배포 LLM 래퍼)을 주입하면, 답이 긍정 접두어로
+    시작할 때 True. ``make_llm_judge`` 로 (prompt, generate) 에서 만들 수 있다. advisory.
+
+    예:
+        from ko_output_guard import Category, Guard, make_llm_judge
+        judge = make_llm_judge(category=Category.SELF_HARM, generate=gemma_yesno)
+        guard = Guard(tier2={Category.SELF_HARM: judge})   # tier2_vet=False 권장
+    """
+
+    def __init__(
+        self,
+        judge: Callable[[str], str],
+        *,
+        positive_prefixes: Sequence[str] = ("예", "Y", "네", "맞"),
+    ) -> None:
+        self._judge = judge
+        self._pos = tuple(p.upper() for p in positive_prefixes)
+
+    def __call__(self, text: str) -> bool:
+        if not isinstance(text, str) or not text.strip():
+            return False
+        ans = (self._judge(text) or "").strip().upper()
+        return ans.startswith(self._pos)
+
+
+def make_llm_judge(
+    *,
+    generate: Callable[[str, str], str],
+    category: object | None = None,
+    prompt: str | None = None,
+    **kw,
+) -> LLMJudgeTier2:
+    """``generate(system_prompt, user_text)->answer`` + 카테고리 기본 프롬프트로 judge 생성.
+
+    ``category`` (Category) 를 주면 ``JUDGE_PROMPTS`` 의 기본 프롬프트를 쓰고, ``prompt`` 로
+    덮어쓸 수 있다. 배포 LLM 은 짧게(max_tokens 작게, temperature 0) '예/아니오'만 답하게 한다.
+    """
+    sys_prompt = prompt
+    if sys_prompt is None and category is not None:
+        sys_prompt = JUDGE_PROMPTS.get(getattr(category, "value", str(category)))
+    if sys_prompt is None:
+        raise ValueError("make_llm_judge needs prompt= or a category with a default prompt")
+    return LLMJudgeTier2(lambda text: generate(sys_prompt, text), **kw)
+
+
 def make_bge_encoder(
     model: str = "BAAI/bge-m3",
     *,

@@ -103,7 +103,7 @@ text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
 
 ## 검증
 
-로컬 pytest **785개 전부 통과**(`pytest -q`).
+로컬 pytest **791개 전부 통과**(`pytest -q`).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -122,7 +122,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **785 passed** (1 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **791 passed** (1 skipped) | `pytest` 전체 스위트 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -281,7 +281,18 @@ guard = Guard(tier2={Category.HATE: clf})    # VET(ambiguous hate FP 제거) + R
 | VIOLENCE | klue/roberta·AI-Hub | 0.8 | 0.00% | 59.7%(AI-Hub conv) |
 | TOXICITY | klue/roberta·unsmile | 0.85 | 0.00% | 91.6%(unsmile) |
 
-→ **분류기는 *생성된 콘텐츠*(서술·위협)를 잡고, 룰은 키워드/요청형을 잡아 상보적**이다 — 실측: 서술 콘텐츠("벗은 몸 만지며 성관계 0.99"·"칼로 찔러 피 솟구쳐 0.97")는 분류기가, 요청형("성관계 묘사해줘 0.21")은 룰이. AI-Hub conv recall(50~60%)이 HATE/TOXICITY 보다 낮은 건 AI-Hub-only(별도 train 셋 부재)·희소 positive·요청형 blind 때문이고, 명백한 콘텐츠는 0.97+ 로 잡는다. ILLEGAL(CRIME=언급≠how-to)·UNSAFE_ADVICE(식약처 특화 데이터 없음)·SELF_HARM(vibhorag EN→KO ideation, 라벨 불일치)은 분류기 미배선 → 룰 + 향후 LLM-judge. 레시피 `eval/train_hate_tier2.py`(HATE)·`eval/train_aihub_cat.py`(SEXUAL/VIOLENCE).
+→ **분류기는 *생성된 콘텐츠*(서술·위협)를 잡고, 룰은 키워드/요청형을 잡아 상보적**이다 — 실측: 서술 콘텐츠("벗은 몸 만지며 성관계 0.99"·"칼로 찔러 피 솟구쳐 0.97")는 분류기가, 요청형("성관계 묘사해줘 0.21")은 룰이. AI-Hub conv recall(50~60%)이 HATE/TOXICITY 보다 낮은 건 AI-Hub-only(별도 train 셋 부재)·희소 positive·요청형 blind 때문이고, 명백한 콘텐츠는 0.97+ 로 잡는다. ILLEGAL(CRIME=언급≠how-to)·UNSAFE_ADVICE(식약처 특화 데이터 없음)·SELF_HARM(vibhorag EN→KO ideation, 라벨 불일치)은 학습 분류기를 만들 라벨 데이터가 없어 **`LLMJudgeTier2`(배포 LLM 의 예/아니오 판정)**로 배선한다. 레시피 `eval/train_hate_tier2.py`(HATE)·`eval/train_aihub_cat.py`(SEXUAL/VIOLENCE).
+
+**LLM-judge Tier-2 (`LLMJudgeTier2`) — 데이터 없는 카테고리.** 배포 LLM(Gemma/Solar 등)에 카테고리 기본 프롬프트(`JUDGE_PROMPTS`)로 "예/아니오"를 물어 `(str)->bool` 로 만든다. `make_llm_judge(category=..., generate=...)` — `generate(system, user)->answer` 콜러블 주입(bring-your-own LLM). SELF_HARM 은 자해 *방법/조장* 만 '예'(위기개입·예방·LD50 설명은 '아니오')로 프롬프트를 좁혀, 룰의 명시 탐지를 RECALL 보강한다. 짧게(max_tokens 작게·temperature 0) 답하게 하고 `tier2_vet=False` 권장.
+
+```python
+from ko_output_guard import Guard, GuardPolicy, Category, make_llm_judge
+def gemma_yesno(system, user):           # 배포 LLM 래퍼
+    return gemma.generate(system=system, user=user, max_tokens=4, temperature=0)
+GUARD = Guard(GuardPolicy(tier2_vet=False), tier2={
+    Category.SELF_HARM: make_llm_judge(category=Category.SELF_HARM, generate=gemma_yesno),
+})
+```
 
 > ⚠️ **`GuardPolicy(tier2_vet=False)` 권장(분류기 배선 시).** 콘텐츠-학습 분류기는 요청형 룰 히트에 blind 라, VET(룰 히트 confirm/deny) 를 켜면 룰의 고정밀 정탐을 잘못 기각할 수 있다(예: '성관계 묘사해줘' 룰 BLOCK 을 분류기 0.21 이 드롭). `tier2_vet=False` 면 분류기는 *룰이 못 잡은* 콘텐츠만 RECALL 보강하고 룰 정탐은 보존한다.
 
