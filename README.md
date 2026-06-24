@@ -228,6 +228,21 @@ ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_h
 > 오프라인 제약: Detoxify(xlm-r, sentencepiece)·Llama-Guard-3-1B(Llama-3 tiktoken)는 SLURM
 > 오프라인 노드에 해당 토크나이저 라이브러리가 없어 제외.
 
+### 에이전틱 보안 harness 대비 (vs LLM Guard, 한국어)
+
+에이전틱 AI 보안 OSS 툴킷 **protectai/llm-guard** 의 Toxicity 스캐너 엔진(=`unitary/toxic-bert`,
+영어)을 같은 한국어 셋에 직접 측정(`eval/bench_toxbert.py`):
+
+| 데이터셋 | ko-output-guard recall | LLM Guard Toxicity(toxic-bert) recall |
+|---|---|---|
+| KMHAS / APEACH / AIHub / toxicity | **83~96%** | **0.0%** (전부) |
+| 의료 도메인 FPR | 1.0% | 0.0% |
+
+- **toxic-bert 는 영어 전용** — 영어 toxic 은 정상 탐지(`...you idiot` → 0.99)하나 한국어 toxic
+  (`죽여버린다 이 멍청한 새끼야`)은 **0.001** 로 완전 맹점. LLM Guard Toxicity 는 한국어에서
+  **recall 0%**(고장 아닌 언어 갭). 영어 우선 에이전틱 harness 가 한국어 배포에서 비기능적임을
+  보여주는 대표 사례 — ko-output-guard 가 그 자리를 메운다. (전체 스위트 비교는 루트 `EVAL.md`.)
+
 ### Tier-2 분류기 — 배포 정책 & 재현 레시피
 
 - **기본은 deterministic-only.** 패키지는 Tier-1(룰)만으로 동작하며, ML·네트워크 의존이 없다. Tier-2 는 **선택**(`Guard(tier2={Category.TOXICITY: fn})`)이고 **bring-your-own-classifier** 다.
