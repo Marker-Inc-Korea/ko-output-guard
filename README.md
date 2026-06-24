@@ -208,6 +208,26 @@ pip install -e .
 
 → **결정론(Tier-1)은 고-precision·저-recall** — precision **94~98%**(명시적 욕설/슬러만 고정밀로 잡고, recall 은 의미·맥락 혐오를 놓침). 의미 기반 recall 은 **옵션 Tier-2 분류기**가 보강한다: 권장 동작점 **thr=0.85 에서 recall 59~92% / precision 75.6~94.8%**. recall-최대점(thr=0.50: recall 76~94% / FPR 18~44% / precision 67.8~90.8%)부터 정밀-우선(thr=0.95)까지 전 구간 sweep 은 `eval/` 참조. toxicity cascade 는 BLOCK 이 아니라 **FLAG(human review)** 라 precision 우선 동작점이 적절하다.
 
+### 경쟁군 대비 (vs smilegate-ai/kor_unsmile, 동일 셋)
+
+전용 한국어 hate 분류기 kor_unsmile 과 head-to-head(`eval/bench_output_*.py`). ko-output-guard
+는 룰(Tier-1)+통합 multi-label 분류기(Tier-2), 둘 다 thr=0.5, 값은 `recall / FPR`(%):
+
+| 데이터셋 | ko-output-guard | kor_unsmile |
+|---|---|---|
+| AI-Hub 윤리 (held-out) | **83.2** / 24.0 | 70.4 / 17.6 |
+| KMHAS | 95.6 / 49.6 | 95.2 / 38.4 |
+| APEACH | 89.2 / 21.2 | 84.4 / 20.8 |
+| **의료 도메인 FPR** (식약처 benign) | **1.0%** | 1.0% |
+
+recall 은 동등~우위(제3자 held-out AI-Hub 에서 **+12.8pp**), **의료 도메인 FPR 은 ~1% 로 동등**
+(둘 다 benign 의료문을 과탐하지 않음). 결정적 차이는 **커버리지** — kor_unsmile 은 hate/toxicity
+*전용*이고, ko-output-guard 는 PII누출·SELF_HARM·UNSAFE_ADVICE·PROMPT_LEAK·SEXUAL·VIOLENCE·
+ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_harm/unsafe/illegal 은 LLM-judge
+로 recall~100%·의료FPR 0~1.7% 별도 검증). 균형 hate셋 FPR 은 둘 다 임계값 의존이라 함께 본다.
+> 오프라인 제약: Detoxify(xlm-r, sentencepiece)·Llama-Guard-3-1B(Llama-3 tiktoken)는 SLURM
+> 오프라인 노드에 해당 토크나이저 라이브러리가 없어 제외.
+
 ### Tier-2 분류기 — 배포 정책 & 재현 레시피
 
 - **기본은 deterministic-only.** 패키지는 Tier-1(룰)만으로 동작하며, ML·네트워크 의존이 없다. Tier-2 는 **선택**(`Guard(tier2={Category.TOXICITY: fn})`)이고 **bring-your-own-classifier** 다.
