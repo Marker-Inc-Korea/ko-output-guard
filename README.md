@@ -239,9 +239,9 @@ ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_h
 | 의료 도메인 FPR | 1.0% | 0.0% |
 
 - **toxic-bert 는 영어 전용** — 영어 toxic 은 정상 탐지(`...you idiot` → 0.99)하나 한국어 toxic
-  (`죽여버린다 이 멍청한 새끼야`)은 **0.001** 로 완전 맹점. LLM Guard Toxicity 는 한국어에서
-  **recall 0%**(고장 아닌 언어 갭). 영어 우선 에이전틱 harness 가 한국어 배포에서 비기능적임을
-  보여주는 대표 사례 — ko-output-guard 가 그 자리를 메운다. (전체 스위트 비교는 루트 `EVAL.md`.)
+  (`죽여버린다 이 멍청한 새끼야`)은 **0.001** 로 완전 맹점. LLM Guard 의 **Toxicity 스캐너는
+  한국어에서 recall 0%**(고장 아닌 언어 갭)로, 영어 우선 OSS 스캐너가 한국어 toxicity 에선 쓸 수
+  없음을 보여준다 — ko-output-guard 가 그 자리를 메운다. (전체 스위트 비교는 루트 `EVAL.md`.)
 
 ### Tier-2 분류기 — 배포 정책 & 재현 레시피
 
