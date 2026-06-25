@@ -52,7 +52,7 @@ def main():
     # 표 1 — 한국어 hate/tox 검출 (held-out)
     print("=== 한국어 hate/tox 검출 (recall% / FPR%) ===")
     print(f"{'dataset':16} | " + " | ".join(f"{s:>14}" for s in SYS))
-    for ds in ["tox_kmhas", "tox_apeach", "aihub_ethics", "toxicity"]:
+    for ds in ["tox_kmhas", "tox_apeach", "aihub_ethics", "toxicity", "khaters"]:
         if ds not in report:
             continue
         cells = []

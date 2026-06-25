@@ -36,6 +36,9 @@ def load_datasets():
     for name in ["tox_kmhas", "tox_apeach", "aihub_ethics", "toxicity"]:
         rows = [json.loads(l) for l in open(f"{EVAL}/{name}.jsonl") if l.strip()]
         ds[name] = ([r["text"] for r in rows], [int(r["label"]) for r in rows])
+    # K-HATERS (humane-lab, native 한국어 hate, held-out — 2023, 신규 추가)
+    kh = [json.loads(l) for l in open("/data1/mk04/eval_external/khaters_test.jsonl") if l.strip()]
+    ds["khaters"] = ([r["text"] for r in kh], [int(r["label"]) for r in kh])
     # 의료 benign (qtaoa 최종 답변)
     med = []
     for line in open(QTAOA):
