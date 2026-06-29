@@ -189,6 +189,30 @@ pip install -e .
 - **PII 탐지(권장)**: `ko-pii>=1.15` — `pip install ko-pii`. 미설치 시 PII 탐지는 라벨앵커 부분 RRN 등만 동작하는 **강등** 상태(`GuardResult.degraded=True`)
 - **입력형 난독 정규화(선택)**: `ko-prompt-guard>=0.1` — 없으면 경량 fallback 으로 graceful 동작
 
+## 배포 통합 예제 (deployment integration)
+
+패키지는 *부품*(룰 엔진·`MultiLabelClassifierTier2`·`LLMJudgeTier2`)만 제공한다. 실제 배포에서
+어떤 부품을 어떤 설정으로 조립할지를 `examples/production_moderation_guard.py` 에 통합 예제로
+고정해 두었다.
+
+```python
+from production_moderation_guard import GUARD
+r = GUARD.check(llm_output)          # 룰(Tier-1) + 통합 multi-label 분류기(Tier-2)
+```
+
+통합 예제가 고정한 배포 결정:
+
+| 항목 | 선택 | 근거 |
+|---|---|---|
+| Tier-2 모델 | **통합 1모델**(`MultiLabelClassifierTier2`, SEXUAL/VIOLENCE/HATE/TOXICITY) | 분리 4모델과 동등 성능 · 서빙 4배 절감(§Tier-2 배포 정책) |
+| 결합 방식 | `tier2_vet=False` — 분류기는 룰 미탐분만 **RECALL 보강** | 룰 정탐 보존 + 요청형 blind 방지(룰=키워드/요청형, 모델=생성 콘텐츠) |
+| threshold | 카테고리별(의료 FPR 로 보정, 예 HATE 0.5) | 실배포 의료 도메인 FPR 기준(KMHAS 아님) |
+| 데이터-부재 카테고리 | SELF_HARM/UNSAFE/ILLEGAL = `LLMJudgeTier2`(배포 LLM 예/아니오) | 학습 라벨 부재 — Gemma 검증 recall ~100%·의료FPR 0~1.7% |
+| 모델 가중치 | bring-your-own | 미설치 시 **결정론 룰-only** 로 동작 |
+
+대칭 입력 가드 `ko-prompt-guard` 도 `examples/production_prompt_guard.py` 로 동일 패턴(룰 + 분류기
+hybrid)을 제공한다.
+
 ## 외부 검증 (제3자 데이터셋, 2026-06)
 
 **TOXICITY — 네이티브 한국어 4개 제3자 데이터셋** (번역 없음):
