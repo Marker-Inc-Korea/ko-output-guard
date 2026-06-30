@@ -196,9 +196,13 @@ pip install -e .
 고정해 두었다.
 
 ```python
-from production_moderation_guard import GUARD
+from production_moderation_guard import GUARD   # import-safe: 가중치 없으면 룰-only
 r = GUARD.check(llm_output)          # 룰(Tier-1) + 통합 multi-label 분류기(Tier-2)
 ```
+
+> 통합 분류기 경로는 `KO_OUT_CLF_DIR` 환경변수로 지정한다(bring-your-own, base=KcELECTRA 권장).
+> 미설정/부재면 **import 만으로 torch·가중치를 요구하지 않고 결정론 룰-only 로 graceful fallback** —
+> quickstart import 가 항상 동작한다(아래 표 '모델 가중치' 약속과 일치).
 
 통합 예제가 고정한 배포 결정:
 
@@ -208,7 +212,7 @@ r = GUARD.check(llm_output)          # 룰(Tier-1) + 통합 multi-label 분류�
 | 결합 방식 | `tier2_vet=False` — 분류기는 룰 미탐분만 **RECALL 보강** | 룰 정탐 보존 + 요청형 blind 방지(룰=키워드/요청형, 모델=생성 콘텐츠) |
 | threshold | 카테고리별(의료 FPR 로 보정, 예 HATE 0.5) | 실배포 의료 도메인 FPR 기준(KMHAS 아님) |
 | 데이터-부재 카테고리 | SELF_HARM/UNSAFE/ILLEGAL = `LLMJudgeTier2`(배포 LLM 예/아니오) | 학습 라벨 부재 — Gemma 검증 recall ~100%·의료FPR 0~1.7% |
-| 모델 가중치 | bring-your-own | 미설치 시 **결정론 룰-only** 로 동작 |
+| 모델 가중치 | bring-your-own(`KO_OUT_CLF_DIR`) | 미설정/부재 시 **결정론 룰-only** 로 동작(import-safe) |
 
 대칭 입력 가드 `ko-prompt-guard` 도 `examples/production_prompt_guard.py` 로 동일 패턴(룰 + 분류기
 hybrid)을 제공한다.
