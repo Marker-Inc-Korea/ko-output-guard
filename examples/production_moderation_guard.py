@@ -1,22 +1,27 @@
 """식약처 배포용 ko-output-guard — 모더레이션 Tier-2 **1개 통합 모델** 배선.
 
-SEXUAL/VIOLENCE/HATE/TOXICITY 를 한 multi-label klue/roberta(공유 인코더, masked 학습:
-SEXUAL/VIOLENCE=AI-Hub, HATE/TOXICITY=unsmile)로 합쳤다. per-category 성능이 분리 4모델과
-동등하면서(아래) 서빙은 1개 모델 — 메모리·지연 4배 절감. 같은 텍스트 forward 는 1회만(캐시).
+SEXUAL/VIOLENCE/HATE/TOXICITY 를 한 multi-label 인코더(공유 인코더, masked 학습:
+SEXUAL/VIOLENCE=AI-Hub, HATE/TOXICITY=unsmile)로 합쳤다. 서빙은 1개 모델 — 메모리·지연
+4배 절감. 같은 텍스트 forward 는 1회만(캐시).
 
-  카테고리   idx  thr   의료FPR   held-out recall(분리모델)
-  SEXUAL     0    0.6   0.60%    48.6%(50.3)
-  VIOLENCE   1    0.5   0.00%    57.1%(59.7)
-  HATE       2    0.5   0.53%    89.8%unsmile/62.4%KMHAS (90.8/56.8)
-  TOXICITY   3    0.5   0.00%    91.9%(91.6)
+base 는 **beomi/KcELECTRA-base-v2022**(MIT, 네이버 댓글 사전학습→혐오·욕설 in-domain)
+권장 — klue/roberta-base 대비 4범주 전부 recall↑·FPR↓, 의료 FPR 1.0→0.0%:
 
+  카테고리   idx  thr   의료FPR   recall (klue/roberta→KcELECTRA)
+  SEXUAL     0    0.6   0.00%    48.6→59.6% (AI-Hub)
+  VIOLENCE   1    0.5   0.00%    57.1→68.0% (AI-Hub)
+  HATE       2    0.5   0.00%    95.6→97.2% / FPR 49.6→40.0 (KMHAS)
+  TOXICITY   3    0.5   0.00%    96.0→95.2% / FPR 32.8→21.2 (toxicity)
+
+레시피: eval/train_unified_kc.py (KcELECTRA, 배포본) · eval/train_unified.py (klue, 기존).
 SELF_HARM 은 라벨 데이터가 없어 LLM-judge(배포 LLM). 사용:
   from production_moderation_guard import GUARD ; GUARD.check(llm_output)
 """
 from ko_output_guard import Guard, GuardPolicy, Category, MultiLabelClassifierTier2
 
 # tier2_vet=False: 분류기는 룰이 못 잡은 콘텐츠만 RECALL 보강(룰 정탐 보존, 요청형 blind 방지).
-_ML = MultiLabelClassifierTier2("/data1/mk04/eval_external/unified_model/final")  # 1개 모델 공유
+# base=KcELECTRA 로 학습한 통합 모델 경로(bring-your-own; eval/train_unified_kc.py 산출물).
+_ML = MultiLabelClassifierTier2("/data1/mk04/eval_external/unified_kc/final")  # 1개 모델 공유
 GUARD = Guard(GuardPolicy(tier2_vet=False), tier2={
     Category.SEXUAL:   _ML.for_label(0, threshold=0.6),
     Category.VIOLENCE: _ML.for_label(1, threshold=0.5),

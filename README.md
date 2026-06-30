@@ -239,14 +239,14 @@ hybrid)을 제공한다.
 
 | 데이터셋 | ko-output-guard | kor_unsmile |
 |---|---|---|
-| AI-Hub 윤리 (held-out) | **83.2** / 24.0 | 70.4 / 17.6 |
-| KMHAS | 95.6 / 49.6 | 95.2 / 38.4 |
-| APEACH | 89.2 / 21.2 | 84.4 / 20.8 |
-| K-HATERS (native-KO, 2023) | 88.6 / 42.6 | 89.6 / 37.0 |
-| **의료 도메인 FPR** (식약처 benign) | **1.0%** | 1.0% |
+| AI-Hub 윤리 (held-out) | **85.0** / 23.6 | 70.4 / 17.6 |
+| KMHAS | **97.2** / 40.0 | 95.2 / 38.4 |
+| APEACH | **93.6** / 17.2 | 84.4 / 20.8 |
+| K-HATERS (native-KO, 2023) | **92.4** / 40.2 | 89.6 / 37.0 |
+| **의료 도메인 FPR** (식약처 benign) | **0.0%** | 1.0% |
 
-recall 은 동등~우위(제3자 held-out AI-Hub 에서 **+12.8pp**), **의료 도메인 FPR 은 ~1% 로 동등**
-(둘 다 benign 의료문을 과탐하지 않음). 결정적 차이는 **커버리지** — kor_unsmile 은 hate/toxicity
+recall 은 동등~우위(제3자 held-out AI-Hub 에서 **+14.6pp**), **의료 도메인 FPR 은 0.0% 로 우위**
+(KcELECTRA 통합 모델이 benign 의료문을 한 건도 과탐하지 않음). 결정적 차이는 **커버리지** — kor_unsmile 은 hate/toxicity
 *전용*이고, ko-output-guard 는 PII누출·SELF_HARM·UNSAFE_ADVICE·PROMPT_LEAK·SEXUAL·VIOLENCE·
 ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_harm/unsafe/illegal 은 LLM-judge
 로 recall~100%·의료FPR 0~1.7% 별도 검증). 균형 hate셋 FPR 은 둘 다 임계값 의존이라 함께 본다.
@@ -260,8 +260,8 @@ ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_h
 
 | 데이터셋 | ko-output-guard recall | LLM Guard Toxicity(toxic-bert) recall |
 |---|---|---|
-| KMHAS / APEACH / AIHub / toxicity | **83~96%** | **0.0%** (전부) |
-| 의료 도메인 FPR | 1.0% | 0.0% |
+| KMHAS / APEACH / AIHub / toxicity | **85~97%** | **0.0%** (전부) |
+| 의료 도메인 FPR | 0.0% | 0.0% |
 
 - **toxic-bert 는 영어 전용** — 영어 toxic 은 정상 탐지(`...you idiot` → 0.99)하나 한국어 toxic
   (`죽여버린다 이 멍청한 새끼야`)은 **0.001** 로 완전 맹점. LLM Guard 의 **Toxicity 스캐너는
@@ -345,16 +345,18 @@ guard = Guard(tier2={Category.HATE: clf})    # VET(ambiguous hate FP 제거) + R
 
 → **분류기는 *생성된 콘텐츠*(서술·위협)를 잡고, 룰은 키워드/요청형을 잡아 상보적**이다 — 실측: 서술 콘텐츠("벗은 몸 만지며 성관계 0.99"·"칼로 찔러 피 솟구쳐 0.97")는 분류기가, 요청형("성관계 묘사해줘 0.21")은 룰이. AI-Hub conv recall(50~60%)이 HATE/TOXICITY 보다 낮은 건 AI-Hub-only(별도 train 셋 부재)·희소 positive·요청형 blind 때문이고, 명백한 콘텐츠는 0.97+ 로 잡는다. ILLEGAL(CRIME=언급≠how-to)·UNSAFE_ADVICE(식약처 특화 데이터 없음)·SELF_HARM(vibhorag EN→KO ideation, 라벨 불일치)은 학습 분류기를 만들 라벨 데이터가 없어 **`LLMJudgeTier2`(배포 LLM 의 예/아니오 판정)**로 배선한다. 레시피 `eval/train_hate_tier2.py`(HATE)·`eval/train_aihub_cat.py`(SEXUAL/VIOLENCE).
 
-**배포 권장 — N개 분리 대신 1개 통합 모델 (`MultiLabelClassifierTier2`).** SEXUAL/VIOLENCE/HATE/TOXICITY 를 *한 multi-label klue/roberta*(공유 인코더 + 카테고리별 sigmoid 헤드)로 합쳤다. 데이터셋이 카테고리별로 달라(SEXUAL/VIOLENCE=AI-Hub, HATE/TOXICITY=unsmile) **masked BCE**(라벨 없는 카테고리는 loss 제외)로 부분 라벨 통합 학습 → 각 범주가 *best 데이터*로 학습돼 분리 모델과 **동등**:
+**배포 권장 — N개 분리 대신 1개 통합 모델 (`MultiLabelClassifierTier2`).** SEXUAL/VIOLENCE/HATE/TOXICITY 를 *한 multi-label 인코더*(공유 인코더 + 카테고리별 sigmoid 헤드)로 합쳤다. 데이터셋이 카테고리별로 달라(SEXUAL/VIOLENCE=AI-Hub, HATE/TOXICITY=unsmile) **masked BCE**(라벨 없는 카테고리는 loss 제외)로 부분 라벨 통합 학습 → 각 범주가 *best 데이터*로 학습된다.
 
-| 카테고리 | idx·thr | 분리 모델 | **통합 1모델** | 의료 FPR |
-|---|---|---|---|---:|
-| SEXUAL | 0·0.6 | 50.3% | 48.6% | 0.60% |
-| VIOLENCE | 1·0.5 | 59.7% | 57.1% | 0.00% |
-| HATE | 2·0.5 | 90.8%/56.8%(KMHAS) | **89.8% / 62.4%** | 0.53% |
-| TOXICITY | 3·0.5 | 91.6% | **91.9%** | 0.00% |
+**base 교체로 개선 (2026-06) — `klue/roberta-base` → `beomi/KcELECTRA-base-v2022`.** KcELECTRA 는 네이버 댓글로 사전학습돼 한국어 혐오·욕설 표현에 **in-domain** — 동일 학습 레시피(masked-BCE)에서 base 만 바꿔 recall↑·FPR↓·의료 FPR↓ 를 동시에 얻었다(라이선스도 CC-BY-SA→**MIT** 로 완화):
 
-→ **4개 모델 = 1개 모델 (성능 동등, 서빙 메모리·지연 4배 절감).** 같은 텍스트 forward 는 1회만(캐시) — 카테고리마다 confirmer 를 불러도 모델은 텍스트당 한 번. 카테고리 간섭이 작은 건 공유 인코더 + 분리 헤드 + masked loss 덕. 레시피 `eval/train_multilabel.py`(AI-Hub 단독)·`eval/train_unified.py`(AI-Hub+unsmile masked 통합). 배선:
+| 카테고리 | idx·thr | 평가 | klue/roberta 통합 | **KcELECTRA 통합** | 의료 FPR |
+|---|---|---|---|---|---:|
+| SEXUAL | 0·0.6 | AI-Hub recall | 48.6% | **59.6%** | 0.00% |
+| VIOLENCE | 1·0.5 | AI-Hub recall | 57.1% | **68.0%** | 0.00% |
+| HATE | 2·0.5 | KMHAS recall/FPR | 95.6 / 49.6 | **97.2 / 40.0** | 0.00% |
+| TOXICITY | 3·0.5 | toxicity recall/FPR | 96.0 / 32.8 | 95.2 / **21.2** | 0.00% |
+
+→ **4개 모델 = 1개 모델 (서빙 메모리·지연 4배 절감), base 교체로 4범주 전부 recall↑ + FPR↓.** SEXUAL/VIOLENCE recall 은 분리 모델(50.3/59.7%)까지 넘어섰고, HATE/TOXICITY 는 균형셋 FPR 이 −9.6·−11.6pp 줄었다. **의료 도메인 FPR 은 4범주 모두 0.00%**(klue 통합은 1.0%) — 식약처 benign 의학 출력 무탐. 같은 텍스트 forward 는 1회만(캐시) — 카테고리마다 confirmer 를 불러도 모델은 텍스트당 한 번. 레시피 `eval/train_unified_kc.py`(KcELECTRA, 배포본)·`eval/train_unified.py`(klue/roberta, 기존). 배선:
 
 ```python
 from ko_output_guard import Guard, GuardPolicy, Category, MultiLabelClassifierTier2
