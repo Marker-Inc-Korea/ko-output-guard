@@ -272,6 +272,30 @@ ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_h
   한국어에서 recall 0%**(고장 아닌 언어 갭)로, 영어 우선 OSS 스캐너가 한국어 toxicity 에선 쓸 수
   없음을 보여준다 — ko-output-guard 가 그 자리를 메운다. (전체 스위트 비교는 루트 `EVAL.md`.)
 
+### Frontier 다국어 가드 대비 (vs Qwen3Guard-Gen-4B)
+
+LLM 기반 생성형 다국어 가드 **Qwen3Guard-Gen-4B**(Qwen, 2025-10, 119개 언어 claim)를 동일 한국어
+toxicity 셋(KMHAS+APEACH, 500/500)에 측정(`eval/qwen3guard_eval.py`, ko-guard 측 `eval/ko_guard_3axis.py`):
+
+| | toxicity recall / FPR | 의료 benign FPR |
+|---|---|---|
+| ko-output-guard (룰+KcELECTRA) | **96.0 / 34.4** | **0.5%** |
+| Qwen3Guard Unsafe | 12.4 / 2.4 | 0.0% |
+| Qwen3Guard +Controversial | 74.8 | 4.0% |
+
+frontier 4B 다국어 가드도 한국어 toxicity 를 strict(Unsafe)에선 **12.4%** 로만 잡고, Controversial 을
+포함해야 74.8% — 그래도 ko-output-guard(96.0) 미만이며 의료 FPR 이 4%로 악화. **의료 도메인 FPR 은
+동급(0.5% vs 0%)에서 recall 은 7.7배**. 균형 hate셋 FPR(34.4)은 recall 로 튜닝된 임계값 트레이드오프.
+
+### AssurAI (TTA·NIPA 2025) 정부 벤치 — scope 분석
+
+**AssurAI**(TTA·NIPA·KAIST·카카오, 2025-11, text 9,560, **CC-BY-NC**)의 실제 LLM 답변(risky=출력
+risk≥4)에 채점(`eval/bench_output_assurai.py`): covered recall **19.9%** · safe FPR 2.4% · **의료 FPR
+0.5%**. AssurAI risky=**의미적 유해 컴플라이언스**(lexically clean prose)라 ko-output-guard 의 *명시적
+콘텐츠 모더레이션* 범위와 대체로 직교 — 명시 마커 범주(hate 35.7·sexual 26.1)는 유의미하나, 어휘적
+how-to 컴플라이언스(illegal 7.2·weapons 7.5·pii 3.0)는 **Tier-2 LLM-judge target**이다. 낮은 FP(safe
+2.4·의료 0.5%)로 과차단 없음 확인. 상세·매핑 한계는 루트 `EVAL.md`.
+
 ### Tier-2 분류기 — 배포 정책 & 재현 레시피
 
 - **기본은 deterministic-only.** 패키지는 Tier-1(룰)만으로 동작하며, ML·네트워크 의존이 없다. Tier-2 는 **선택**(`Guard(tier2={Category.TOXICITY: fn})`)이고 **bring-your-own-classifier** 다.
