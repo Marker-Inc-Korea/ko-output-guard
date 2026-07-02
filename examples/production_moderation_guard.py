@@ -44,11 +44,26 @@ else:
     # 룰-only' 약속과 일치한다.
     GUARD = Guard()
 
-# SELF_HARM 은 학습 데이터가 없어 LLM-judge(배포 LLM=Gemma/Solar 주입):
-# from ko_output_guard import make_llm_judge
-# def gemma_yesno(system, user):
-#     return gemma.generate(system=system, user=user, max_tokens=4, temperature=0)
-# GUARD.tier2[Category.SELF_HARM] = make_llm_judge(category=Category.SELF_HARM, generate=gemma_yesno)
+# --- Tier-2 LLM-judge 배선 (SELF_HARM / ILLEGAL / UNSAFE_ADVICE) ---------------------
+# KcELECTRA 통합 분류기는 SEXUAL/VIOLENCE/HATE/TOXICITY(어휘·명시 콘텐츠)를 덮는다. 그러나
+# self_harm/illegal 처럼 *의미적 유해 컴플라이언스*(슬러 없이 조리있게 유해 방법을 설명하는
+# 산문 — 정부 벤치 AssurAI 에서 이 계열 recall 이 낮았다)는 학습 라벨이 없어 LLM-judge 로 보강한다.
+# judge 는 룰이 못 잡은 카테고리만 RECALL 경로에서 호출(tier2_vet=False)하며 advisory 다.
+# JUDGE_PROMPTS 에 의료 carve-out(LD50·병용금기 경고·예방/신고/뉴스는 '아니오')이 내장돼 있어
+# 식약처 benign 의료 출력을 오탐하지 않는다(전용 의료 벤치로 FPR 게이트 후 배포).
+#
+#   from ko_output_guard import make_llm_judge
+#   def gemma_yesno(system: str, user: str) -> str:            # 배포 LLM 래퍼(예/아니오만)
+#       return gemma.generate(system=system, user=user, max_tokens=4, temperature=0)
+#   for cat in (Category.SELF_HARM, Category.ILLEGAL, Category.UNSAFE_ADVICE):
+#       GUARD.tier2[cat] = make_llm_judge(category=cat, generate=gemma_yesno)
+#
+# 측정(eval/judge_eval.py, gemma-4-26B judge, AssurAI 실셋):
+#   illegal   recall 6.8 → 28.5%  (safe FPR 2.3 불변)
+#   self_harm recall 13.4 → 42.4% (safe FPR 4.8→5.2)
+#   의료 benign FPR 0.5 → 1.5% (+1.0pp) — judge 는 opt-in 이라 미배선 기본 가드는 0.5% 불변.
+#   즉 harmful-compliance recall +21~29pp 를 advisory FLAG + 의료 FPR 1pp 비용으로 얻는
+#   트레이드오프다. 의료 FPR 0% 가 hard-constraint 면 judge 를 끄거나 임계/프롬프트를 조이라.
 
 if __name__ == "__main__":
     wired = _CLF_DIR and os.path.isdir(_CLF_DIR)

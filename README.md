@@ -296,6 +296,20 @@ risk≥4)에 채점(`eval/bench_output_assurai.py`): covered recall **19.9%** ·
 how-to 컴플라이언스(illegal 7.2·weapons 7.5·pii 3.0)는 **Tier-2 LLM-judge target**이다. 낮은 FP(safe
 2.4·의료 0.5%)로 과차단 없음 확인. 상세·매핑 한계는 루트 `EVAL.md`.
 
+**Tier-2 LLM-judge 배선 효과 (`eval/judge_eval.py`, gemma-4-26B).** 위 scope 분석이 예측한 대로,
+harmful-compliance 카테고리는 LLM-judge 로 recall 을 크게 회수한다(judge 는 룰 미탐 시에만 호출되는
+advisory RECALL 보강, opt-in):
+
+| 카테고리 | baseline(룰+분류기) recall | +judge recall | safe FPR |
+|---|---|---|---|
+| illegal (n=2936) | 6.8% | **28.5%** (+21.7) | 2.3→2.3 |
+| self_harm (n=514) | 13.4% | **42.4%** (+29.0) | 4.8→5.2 |
+| 의료 benign FPR (n=200) | 0.5% | — | 0.5→**1.5%** (+1.0) |
+
+즉 harmful-compliance recall **+21~29pp** 를 **advisory FLAG + 의료 FPR 1pp** 비용으로 얻는다. judge 는
+opt-in(bring-your-own LLM)이라 미배선 기본 가드의 의료 FPR 0.5% 는 불변 — 의료 FPR 0% 가 hard-constraint
+면 judge 를 끄거나 임계/프롬프트를 조인다. 배선은 `examples/production_moderation_guard.py`.
+
 ### Tier-2 분류기 — 배포 정책 & 재현 레시피
 
 - **기본은 deterministic-only.** 패키지는 Tier-1(룰)만으로 동작하며, ML·네트워크 의존이 없다. Tier-2 는 **선택**(`Guard(tier2={Category.TOXICITY: fn})`)이고 **bring-your-own-classifier** 다.
