@@ -211,7 +211,7 @@ r = GUARD.check(llm_output)          # 룰(Tier-1) + 통합 multi-label 분류�
 | Tier-2 모델 | **통합 1모델**(`MultiLabelClassifierTier2`, SEXUAL/VIOLENCE/HATE/TOXICITY) | 분리 4모델과 동등 성능 · 서빙 4배 절감(§Tier-2 배포 정책) |
 | 결합 방식 | `tier2_vet=False` — 분류기는 룰 미탐분만 **RECALL 보강** | 룰 정탐 보존 + 요청형 blind 방지(룰=키워드/요청형, 모델=생성 콘텐츠) |
 | threshold | 카테고리별(의료 FPR 로 보정, 예 HATE 0.5) | 실배포 의료 도메인 FPR 기준(KMHAS 아님) |
-| 데이터-부재 카테고리 | SELF_HARM/UNSAFE/ILLEGAL = `LLMJudgeTier2`(배포 LLM 예/아니오) | 학습 라벨 부재 — Gemma 검증 recall ~100%·의료FPR 0~1.7% |
+| 데이터-부재 카테고리 | SELF_HARM/UNSAFE/ILLEGAL = `LLMJudgeTier2`(배포 LLM 예/아니오) | 학습 라벨 부재 — AssurAI 실측 recall illegal 28.5%·self_harm 42.4%(의료 FPR 0.5→1.5%, §Tier-2 judge) |
 | 모델 가중치 | bring-your-own(`KO_OUT_CLF_DIR`) | 미설정/부재 시 **결정론 룰-only** 로 동작(import-safe) |
 
 대칭 입력 가드 `ko-prompt-guard` 도 `examples/production_prompt_guard.py` 로 동일 패턴(룰 + 분류기
@@ -253,7 +253,7 @@ recall 은 동등~우위(제3자 held-out AI-Hub 에서 **+14.6pp**), **의료 �
 (KcELECTRA 통합 모델이 benign 의료문을 한 건도 과탐하지 않음). 결정적 차이는 **커버리지** — kor_unsmile 은 hate/toxicity
 *전용*이고, ko-output-guard 는 PII누출·SELF_HARM·UNSAFE_ADVICE·PROMPT_LEAK·SEXUAL·VIOLENCE·
 ILLEGAL·WEAPONS 까지 **11개 카테고리**를 한 가드로 덮는다(self_harm/unsafe/illegal 은 LLM-judge
-로 recall~100%·의료FPR 0~1.7% 별도 검증). 균형 hate셋 FPR 은 둘 다 임계값 의존이라 함께 본다.
+로 AssurAI 실측 recall illegal 28.5%·self_harm 42.4% 별도 검증). 균형 hate셋 FPR 은 둘 다 임계값 의존이라 함께 본다.
 > 오프라인 제약: Detoxify(xlm-r, sentencepiece)·Llama-Guard-3-1B(Llama-3 tiktoken)는 SLURM
 > 오프라인 노드에 해당 토크나이저 라이브러리가 없어 제외.
 
