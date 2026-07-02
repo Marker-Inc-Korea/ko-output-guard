@@ -13,7 +13,7 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 INP = "/data1/mk04/eval_external/qwen3guard_eval_input.jsonl"
-V6 = "/data1/mk04/eval_external/ko_injection_guard_v6/final"
+V6 = "/data1/mk04/eval_external/ko_injection_guard_v8/final"
 KC = "/data1/mk04/eval_external/unified_kc/final"
 OUT = "/data1/mk04/eval_external/ko_guard_3axis_report.json"
 
