@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import glob
 import json
+import os
 
 SETS = "/data1/mk04/eval_external/prompt_eval_sets.json"
 EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
-QTAOA = "/data1/mk04/medi/agentic_v3/data/qtaoa_combined.jsonl"
+QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
 OUT = "/data1/mk04/eval_external/llmguard_report.json"
 
 

@@ -1,3 +1,4 @@
+import os
 """통합 multi-label 모더레이션 v2 — base를 KcELECTRA로 교체 (혐오/욕설 in-domain).
 
 기존 unified=klue/roberta-base. KcELECTRA(beomi/KcELECTRA-base-v2022, MIT)는 네이버 댓글로
@@ -16,7 +17,8 @@ OUTDIR = os.environ.get("OUT_DIR", "/data1/mk04/eval_external/unified_kc")
 D = "/data1/mk04/eval_external"
 AHUB = f"{D}/aihub_ethics/147.텍스트_윤리검증_데이터/01.데이터/2.Validation/라벨링데이터/aihub/extracted"
 EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
-QTAOA = "/data1/mk04/medi/agentic_v3/data/qtaoa_combined.jsonl"
+QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
 HATE_COLS = ["여성/가족", "남성", "성소수자", "인종/국적", "연령", "지역", "종교", "기타 혐오"]
 print(f"BASE={MODEL}")
 

@@ -6,12 +6,14 @@ ko-output-guard(95.6/83.2 recall)·kor_unsmile 과 동일 셋 비교용. ner_env
 from __future__ import annotations
 
 import json
+import os
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
-QTAOA = "/data1/mk04/medi/agentic_v3/data/qtaoa_combined.jsonl"
+QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
 OUT = "/data1/mk04/eval_external/toxbert_report.json"
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 THR = 0.5
