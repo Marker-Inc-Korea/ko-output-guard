@@ -96,6 +96,29 @@ def make_hate_tier2(threshold: float = 0.60, **kw) -> EmbeddingTier2:
     return EmbeddingTier2(default_hate_anchors(), threshold=threshold, **kw)
 
 
+def make_harmful_tier2(model_dir: "str | None" = None, *, threshold: float = 0.5, **kw):
+    """유해 카테고리(ILLEGAL/WEAPONS/SELF_HARM/UNSAFE_ADVICE) recall 보강용 학습 분류기 Tier-2 dict.
+
+    이 카테고리들은 결정론 룰 recall 이 낮다(illegal 6.8%·self_harm 13.4% 등). 학습 유해출력 분류기
+    (KcELECTRA, safe=0/harmful=1)를 4개 카테고리에 공유로 꽂아 recall 을 끌어올린다(refusal/간접PI 와
+    동형: 룰=precision-0FP 코어 + 학습분류기=recall 천장 돌파). 가중치는 bring-your-own.
+
+        from ko_output_guard import Guard, make_harmful_tier2
+        Guard(tier2=make_harmful_tier2("/path/ko_harmful_clf/final"))     # 또는 env KO_HARMFUL_CLF_DIR
+
+    ``model_dir`` 없고 env 도 없으면 ``{}`` (no-op, 순수 결정론 유지). recall-우선이라 ``tier2_vet=False``
+    정책(룰 히트를 분류기가 기각 못 하게)과 함께 쓰길 권장.
+    """
+    import os
+    d = model_dir or os.environ.get("KO_HARMFUL_CLF_DIR")
+    if not d:
+        return {}
+    from .result import Category
+    clf = ClassifierTier2(d, threshold=threshold, positive_index=1, **kw)
+    return {c: clf for c in (Category.ILLEGAL, Category.WEAPONS,
+                             Category.SELF_HARM, Category.UNSAFE_ADVICE)}
+
+
 class ClassifierTier2:
     """학습된 HF 시퀀스 분류기 기반 Tier-2 confirmer — ``__call__(text)->bool``.
 
