@@ -10,8 +10,9 @@ from .sexual import scan_sexual
 from .violence import scan_violence
 from .hate import scan_hate
 from .illegal import scan_illegal
+from .data_exfil import scan_data_exfil
 
 __all__ = ["scan_secrets", "scan_pii_leak", "scan_unsafe_advice",
            "scan_self_harm", "scan_weapons", "scan_toxicity", "scan_prompt_leak",
-           "scan_sexual", "scan_violence", "scan_hate", "scan_illegal",
+           "scan_sexual", "scan_violence", "scan_hate", "scan_illegal", "scan_data_exfil",
            "pii_backend_available", "PIIBackendUnavailable"]

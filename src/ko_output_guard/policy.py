@@ -24,6 +24,7 @@ class GuardPolicy(BaseModel):
     detect_violence: bool = True
     detect_hate: bool = True
     detect_illegal: bool = True
+    detect_data_exfil: bool = True
 
     # 한국어 detector(toxicity/unsafe/prompt-leak)에 난독 정규화를 적용할지.
     # SECRET/PII 는 형식 보존을 위해 항상 원본에서 검사한다(정규화 미적용).
@@ -60,6 +61,7 @@ class GuardPolicy(BaseModel):
         Category.SEXUAL,       # 노골적 성행위/CSAM → BLOCK
         Category.ILLEGAL,      # 범죄 조장(해킹/사기/마약 등) → BLOCK
         Category.HATE,         # 보호집단 비인간화·차별 선동 → BLOCK
+        Category.DATA_EXFIL,   # 마크다운 이미지 데이터유출(zero-click) → BLOCK
         # VIOLENCE 는 block_categories 미포함 → FLAG(검토). 정책으로 추가 가능.
     })
     min_block_severity: Severity = Severity.HIGH

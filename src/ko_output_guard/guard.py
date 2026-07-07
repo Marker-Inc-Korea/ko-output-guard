@@ -95,6 +95,8 @@ class Guard:
             violations += detectors.scan_hate(norm)
         if p.detect_illegal:
             violations += detectors.scan_illegal(norm)
+        if p.detect_data_exfil:
+            violations += detectors.scan_data_exfil(text)
 
         # Tier-2 모델(LLM-judge/ML) — 두 역할을 한 분류기 인터페이스로 수행한다:
         #   (1) VET(정밀): 결정론이 잡았으나 의미적 회색지대(ambiguous=True)인 히트를 confirm/

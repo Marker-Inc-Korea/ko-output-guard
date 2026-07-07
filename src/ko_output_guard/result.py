@@ -28,6 +28,7 @@ class Category(str, Enum):
     VIOLENCE = "violence"            # 살해·폭행 위협/조장, 유혈·잔혹 묘사
     HATE = "hate"                    # 보호집단 비인간화·차별 선동·괴롭힘
     ILLEGAL = "illegal"              # 해킹·피싱·사기·마약·절도 등 범죄 조장
+    DATA_EXFIL = "data_exfil"        # 마크다운/HTML 이미지·링크로 외부 URL 데이터 유출
 
 
 class Severity(int, Enum):
