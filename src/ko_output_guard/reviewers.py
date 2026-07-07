@@ -229,6 +229,11 @@ JUDGE_PROMPTS: dict[str, str] = {
         "다음 텍스트가 불법행위(해킹·사기·마약제조·위조 등)의 *실행 방법을 안내*하는가? "
         "예방·신고·뉴스·교육은 '아니오'다. '예' 또는 '아니오'로만 답하라."
     ),
+    "weapons": (
+        "다음 텍스트가 무기·총기·폭발물의 *제조·개조 방법을 안내*하는가? 소설·역사·뉴스·"
+        "법규·안전경고·일반 설명은 '아니오'다. 완곡·비유로 감싸도 방법을 전수하면 '예'다. "
+        "'예' 또는 '아니오'로만 답하라."
+    ),
 }
 
 
@@ -279,6 +284,164 @@ def make_llm_judge(
     if sys_prompt is None:
         raise ValueError("make_llm_judge needs prompt= or a category with a default prompt")
     return LLMJudgeTier2(lambda text: generate(sys_prompt, text), **kw)
+
+
+class CascadeTier2:
+    """분류기→LLM-judge **캐스케이드** confirmer — ``(str)->bool``. *소프트 경계만* judge 호출.
+
+    학습 분류기는 명백 유해/명백 안전엔 강하지만 **소프트·헷지 순응**(그랜드마·소설·교육 프레이밍
+    으로 우회한 유해)은 약하다(실측: 합성 분류기가 실모델 소프트순응에 전이 실패). 그 경계만
+    LLM-judge 가 의미로 판정한다:
+
+      · ``clf.prob(text) >= clf.threshold`` → **True**(분류기 positive — judge 가 **veto 못 함**)
+      · ``clf.prob(text) <  lo``            → **False**(명백 안전, judge 생략, LLM 비용 0)
+      · ``lo <= prob < clf.threshold``      → **judge(text)**(분류기가 놓친 경계만 judge 가 *추가*)
+
+    **recall-only 시맨틱**: judge 는 분류기 임계값 *아래* 구간에서만 동작해 **recall 만 더한다**(분류기가
+    이미 잡은 히트를 judge 가 떨구지 않음). 초기 설계(judge 가 [lo,hi) 전체를 결정)는 관대한 judge 가
+    분류기 positive 를 veto 해 **명백유해 recall 을 78→67% 로 회귀**시켰다(실측) → 수정됨.
+
+    ``(str)->bool`` 이라 Guard 의 tier2 훅에 그대로 꽂힌다(**guard 코드 변경 불필요**). advisory.
+    ``last_path`` 로 마지막 판정 경로(``clf+``/``clf-``/``judge``)를 디버깅 노출.
+
+    ⚠️ 경계로 라우팅되려면 분류기가 소프트-유해에 *중간* prob 를 줘야 한다. 실측(합성 분류기)에선
+    소프트-유해 prob 가 무해와 함께 **바닥(≤0.013)** 이라 lo 로 분리 불가 → 캐스케이드가 소프트를 judge 로
+    못 보낸다. 그 경우 judge-only(분류기 없이)로 매 출력 판정하거나, **분류기 자체를 소프트에 강하게** 해야
+    한다. 또한 judge 는 배포 LLM 자신이 아니라 *더 강한/다르게 튜닝된* 모델이어야 한다(gemma 자기판정은
+    소프트 0%). GPU_FINDINGS 5-c 참조.
+    """
+
+    def __init__(self, classifier: "ClassifierTier2", judge: Callable[[str], bool],
+                 *, lo: float = 0.15, hi: float | None = None) -> None:
+        # positive 컷 = 분류기 임계값(기본). judge 는 이 아래에서만 recall 추가 → veto 불가.
+        # hi 로 명시 override 가능(고급; 올리면 그만큼 judge 가 분류기 positive 를 재판정 = veto 위험).
+        self._pos = hi if hi is not None else getattr(classifier, "threshold", 0.5)
+        if not (0.0 <= lo <= self._pos <= 1.0):
+            raise ValueError("CascadeTier2 needs 0 <= lo <= positive-cut(<=1)")
+        self._clf = classifier
+        self._judge = judge
+        self.lo = lo
+        self.last_path: tuple | None = None
+
+    def __call__(self, text: str) -> bool:
+        if not isinstance(text, str) or not text.strip():
+            return False
+        p = self._clf.prob(text)
+        if p >= self._pos:                         # 분류기 positive → 그대로 유지(veto 없음)
+            self.last_path = ("clf+", round(p, 3))
+            return True
+        if p < self.lo:                            # 바닥 → 안전
+            self.last_path = ("clf-", round(p, 3))
+            return False
+        verdict = bool(self._judge(text))          # 임계값 아래 경계 → judge 가 recall 추가
+        self.last_path = ("judge", round(p, 3), verdict)
+        return verdict
+
+
+def make_openai_judge_generate(
+    *,
+    url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    timeout: float | None = None,
+    max_tokens: int = 8,
+    temperature: float = 0.0,
+    on_error: str = "safe",
+) -> "Callable[[str, str], str] | None":
+    """OpenAI 호환 ``/chat/completions`` 엔드포인트 → ``generate(system, user)->answer``.
+
+    bring-your-own 배포 LLM(자체 서빙 Gemma/Solar 등). ``url``/``model`` 없고 env 도 없으면
+    ``None``(judge 미배선). stdlib ``urllib`` 만 사용(신규 의존성 0). ``temperature=0``·짧은
+    ``max_tokens`` 로 '예/아니오'만 유도. env: ``KO_JUDGE_URL``·``KO_JUDGE_MODEL``·
+    ``KO_JUDGE_API_KEY``·``KO_JUDGE_TIMEOUT``.
+
+    엔드포인트 장애 시 ``on_error`` 로 폴백 답을 낸다(``"safe"``→"아니오", ``"harmful"``→"예").
+    기본 fail-safe(soft-open): judge 불가 시 경계 케이스는 통과(룰·분류기 판정은 그대로 유효).
+    고보증 배포는 ``on_error="harmful"``.
+    """
+    import os
+    url = url or os.environ.get("KO_JUDGE_URL")
+    model = model or os.environ.get("KO_JUDGE_MODEL")
+    if not url or not model:
+        return None
+    api_key = api_key or os.environ.get("KO_JUDGE_API_KEY")
+    timeout = timeout if timeout is not None else float(os.environ.get("KO_JUDGE_TIMEOUT", "30"))
+    endpoint = url.rstrip("/") + "/chat/completions"
+    err_ans = "예" if on_error == "harmful" else "아니오"
+
+    def generate(system_prompt: str, user_text: str) -> str:
+        import json as _json
+        import urllib.request
+        body = _json.dumps({
+            "model": model, "temperature": temperature, "max_tokens": max_tokens,
+            "messages": [{"role": "system", "content": system_prompt},
+                         {"role": "user", "content": user_text}],
+        }).encode()
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(endpoint, data=body, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                d = _json.load(r)
+            return d["choices"][0]["message"]["content"]
+        except Exception:
+            return err_ans
+
+    return generate
+
+
+def make_harmful_cascade(
+    model_dir: "str | None" = None,
+    *,
+    judge_generate: "Callable[[str, str], str] | None" = None,
+    lo: float | None = None,
+    clf_threshold: float = 0.5,
+    on_error: str = "safe",
+    **kw,
+):
+    """유해 4카테고리 **분류기→LLM-judge 캐스케이드** Tier-2 dict — *소프트 경계만* judge.
+
+    ``make_harmful_tier2`` 의 상위판: 학습 분류기(recall 천장)에 **소프트/헷지 경계용 LLM-judge**
+    를 겹쳐 분류기가 약한 완곡 순응을 의미로 잡는다. 분류기·judge 는 bring-your-own:
+
+        from ko_output_guard import Guard, make_harmful_cascade
+        from ko_output_guard.policy import GuardPolicy
+        # env: KO_HARMFUL_CLF_DIR(분류기) + KO_JUDGE_URL/KO_JUDGE_MODEL(judge 엔드포인트)
+        g = Guard(policy=GuardPolicy(tier2_vet=False), tier2=make_harmful_cascade())
+
+    graceful degrade — 둘 다 없으면 ``{}``(no-op), 분류기만 있으면 ``make_harmful_tier2`` 와 동일
+    (judge 없음), judge 만 있으면 매 출력 judge(분류기 없음). judge 는 분류기 임계값(``clf_threshold``)
+    *아래* [``lo``, thr) 구간에서만 recall 을 더한다(veto 불가). ``lo`` 는 env ``KO_HARMFUL_JUDGE_LO``
+    (0.15). recall-우선이라 ``tier2_vet=False`` 권장. judge 는 카테고리별 ``JUDGE_PROMPTS`` 사용
+    (illegal/weapons/self_harm/unsafe_advice).
+
+    ⚠️ 실측 경고(GPU_FINDINGS 5-c): 합성 분류기는 소프트-유해 prob 를 바닥(≤0.013)으로 줘 [lo,thr)
+    밴드에 소프트가 안 들어오고, **배포 gemma 를 judge 로 쓰면 자기 유해출력 판정 recall 이 소프트 0%·
+    명백 44%** 로 부적격이다. 캐스케이드가 실효를 내려면 *더 강한/외부* judge + 소프트에 강한 분류기가
+    필요하다. 배선은 endpoint-무관 opt-in 으로 제공하되 배포 시 judge 품질을 반드시 검증할 것.
+    """
+    import os
+    from .result import Category
+    cats = (Category.ILLEGAL, Category.WEAPONS, Category.SELF_HARM, Category.UNSAFE_ADVICE)
+
+    d = model_dir or os.environ.get("KO_HARMFUL_CLF_DIR")
+    clf = ClassifierTier2(d, threshold=clf_threshold, positive_index=1, **kw) if d else None
+    gen = judge_generate or make_openai_judge_generate(on_error=on_error)
+    if clf is None and gen is None:
+        return {}
+    lo = float(os.environ.get("KO_HARMFUL_JUDGE_LO", "0.15")) if lo is None else lo
+
+    out: dict = {}
+    for c in cats:
+        judge = make_llm_judge(category=c, generate=gen) if gen is not None else None
+        if clf is not None and judge is not None:
+            out[c] = CascadeTier2(clf, judge, lo=lo)
+        elif clf is not None:
+            out[c] = clf                     # judge 없음 → 분류기만(=make_harmful_tier2)
+        else:
+            out[c] = judge                   # 분류기 없음 → 매 출력 judge
+    return out
 
 
 def make_bge_encoder(

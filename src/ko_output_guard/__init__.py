@@ -17,15 +17,18 @@ from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Viol
 # Opt-in Tier-2 reviewer (ML-free at import; bge-m3 backend imported lazily).
 from .reviewers import (
     JUDGE_PROMPTS,
+    CascadeTier2,
     ClassifierTier2,
     EmbeddingTier2,
     LLMJudgeTier2,
     MultiLabelClassifierTier2,
     default_hate_anchors,
     make_bge_encoder,
+    make_harmful_cascade,
     make_hate_tier2,
     make_harmful_tier2,
     make_llm_judge,
+    make_openai_judge_generate,
 )
 
 __version__ = "0.1.0"
@@ -33,6 +36,7 @@ __all__ = [
     "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
     "Verdict", "Category", "Severity", "Violation",
     "PIIBackendUnavailable", "pii_backend_available",
-    "EmbeddingTier2", "ClassifierTier2", "MultiLabelClassifierTier2", "LLMJudgeTier2", "make_hate_tier2", "make_harmful_tier2",
-    "make_llm_judge", "make_bge_encoder", "default_hate_anchors", "JUDGE_PROMPTS",
+    "EmbeddingTier2", "ClassifierTier2", "MultiLabelClassifierTier2", "LLMJudgeTier2", "CascadeTier2",
+    "make_hate_tier2", "make_harmful_tier2", "make_harmful_cascade",
+    "make_llm_judge", "make_openai_judge_generate", "make_bge_encoder", "default_hate_anchors", "JUDGE_PROMPTS",
 ]
