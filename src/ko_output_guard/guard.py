@@ -17,12 +17,8 @@ from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Viol
 # toxicity/unsafe/prompt-leak 은 정규화본 offset 이라 원본에 적용하면 어긋난다.
 _ORIGINAL_OFFSET = frozenset({Category.SECRET_LEAK, Category.PII_LEAK})
 
-# OG-6: 위해 카테고리(위험권고/자해/무기)는 정규화본 offset 이라 span 마스킹이 어긋난다.
-# 이들이 BLOCK 을 유발하면 원문을 그대로 돌려주면 안 되므로(위해 내용 재노출) 전체를
-# 차단 placeholder 로 대체한다.
-_DANGEROUS_CATEGORIES = frozenset({
-    Category.UNSAFE_ADVICE, Category.SELF_HARM, Category.WEAPONS,
-})
+# 원본 offset 이 없는 BLOCK 카테고리는 span 마스킹을 시도하지 않는다.
+# 정규화본 offset 이거나 span 자체가 없으면 원문 재노출 위험이 있으므로 전체 placeholder.
 _BLOCK_PLACEHOLDER = "[BLOCKED: unsafe content removed]"
 
 
@@ -156,10 +152,10 @@ class Guard:
         vt = tuple(violations)
         redacted = None
         if verdict is Verdict.BLOCK:
-            # OG-6: 위해 카테고리가 BLOCK 사유면 span 마스킹(정규화 offset)로는 원문이
-            # 그대로 새므로 전체를 차단 placeholder 로 대체한다. SECRET/PII 만 BLOCK 이면
-            # 기존 span 마스킹을 유지한다(형식 보존).
-            if any(v.category in _DANGEROUS_CATEGORIES for v in blocking):
+            # SECRET/PII 처럼 원본 offset 을 가진 카테고리만 span 마스킹이 안전하다.
+            # 나머지 BLOCK(unsafe/hate/illegal/sexual/prompt/data_exfil 등)은 원문 재노출을
+            # 막기 위해 전체 placeholder 로 대체한다.
+            if any(v.category not in _ORIGINAL_OFFSET for v in blocking):
                 redacted = _BLOCK_PLACEHOLDER
             else:
                 redacted = _redact(text, vt)
