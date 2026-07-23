@@ -17,6 +17,9 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
+
+from .result import Category
 
 Encoder = Callable[[Sequence[str]], "list[list[float]]"]
 
@@ -33,7 +36,7 @@ def default_hate_anchors() -> list[str]:
 
 
 def _cosine_topk_mean(vec: list[float], mat: list[list[float]], k: int) -> float:
-    sims = [sum(a * b for a, b in zip(vec, row)) for row in mat]
+    sims = [sum(a * b for a, b in zip(vec, row, strict=False)) for row in mat]
     if not sims:
         return 0.0
     sims.sort(reverse=True)
@@ -85,7 +88,7 @@ class EmbeddingTier2:
         return self.risk(text) > self.threshold
 
 
-def make_hate_tier2(threshold: float = 0.60, **kw) -> EmbeddingTier2:
+def make_hate_tier2(threshold: float = 0.60, **kw: Any) -> EmbeddingTier2:
     """기본 HATE 앵커로 임베딩 Tier-2 confirmer 생성.
 
     ⚠️ 임베딩-유사도는 *주제*는 잡아도 *입장/의도* 분리가 약해 **HATE 에는 recall↑ 시
@@ -96,7 +99,9 @@ def make_hate_tier2(threshold: float = 0.60, **kw) -> EmbeddingTier2:
     return EmbeddingTier2(default_hate_anchors(), threshold=threshold, **kw)
 
 
-def make_harmful_tier2(model_dir: "str | None" = None, *, threshold: float = 0.5, **kw):
+def make_harmful_tier2(
+    model_dir: str | None = None, *, threshold: float = 0.5, **kw: Any
+) -> dict[Category, Callable[[str], bool]]:
     """유해 카테고리(ILLEGAL/WEAPONS/SELF_HARM/UNSAFE_ADVICE) recall 보강용 학습 분류기 Tier-2 dict.
 
     이 카테고리들은 결정론 룰 recall 이 낮다(illegal 6.8%·self_harm 13.4% 등). 학습 유해출력 분류기
@@ -113,10 +118,16 @@ def make_harmful_tier2(model_dir: "str | None" = None, *, threshold: float = 0.5
     d = model_dir or os.environ.get("KO_HARMFUL_CLF_DIR")
     if not d:
         return {}
-    from .result import Category
     clf = ClassifierTier2(d, threshold=threshold, positive_index=1, **kw)
-    return {c: clf for c in (Category.ILLEGAL, Category.WEAPONS,
-                             Category.SELF_HARM, Category.UNSAFE_ADVICE)}
+    return {
+        c: clf
+        for c in (
+            Category.ILLEGAL,
+            Category.WEAPONS,
+            Category.SELF_HARM,
+            Category.UNSAFE_ADVICE,
+        )
+    }
 
 
 class ClassifierTier2:
@@ -201,7 +212,8 @@ class MultiLabelClassifierTier2:
         with torch.no_grad():
             enc = self._tok(text, truncation=True, max_length=self.max_length,
                             return_tensors="pt").to(self._dev)
-            p = torch.sigmoid(self._net(**enc).logits[0]).cpu().tolist()
+            raw_probs = torch.sigmoid(self._net(**enc).logits[0]).cpu().tolist()
+            p = [float(value) for value in raw_probs]
         self._cache_text, self._cache_probs = text, p
         return p
 
@@ -271,7 +283,7 @@ def make_llm_judge(
     generate: Callable[[str, str], str],
     category: object | None = None,
     prompt: str | None = None,
-    **kw,
+    **kw: Any,
 ) -> LLMJudgeTier2:
     """``generate(system_prompt, user_text)->answer`` + 카테고리 기본 프롬프트로 judge 생성.
 
@@ -311,7 +323,7 @@ class CascadeTier2:
     소프트 0%). GPU_FINDINGS 5-c 참조.
     """
 
-    def __init__(self, classifier: "ClassifierTier2", judge: Callable[[str], bool],
+    def __init__(self, classifier: ClassifierTier2, judge: Callable[[str], bool],
                  *, lo: float = 0.15, hi: float | None = None) -> None:
         # positive 컷 = 분류기 임계값(기본). judge 는 이 아래에서만 recall 추가 → veto 불가.
         # hi 로 명시 override 가능(고급; 올리면 그만큼 judge 가 분류기 positive 를 재판정 = veto 위험).
@@ -321,7 +333,7 @@ class CascadeTier2:
         self._clf = classifier
         self._judge = judge
         self.lo = lo
-        self.last_path: tuple | None = None
+        self.last_path: tuple[str, float] | tuple[str, float, bool] | None = None
 
     def __call__(self, text: str) -> bool:
         if not isinstance(text, str) or not text.strip():
@@ -347,7 +359,7 @@ def make_openai_judge_generate(
     max_tokens: int = 8,
     temperature: float = 0.0,
     on_error: str = "safe",
-) -> "Callable[[str, str], str] | None":
+) -> Callable[[str, str], str] | None:
     """OpenAI 호환 ``/chat/completions`` 엔드포인트 → ``generate(system, user)->answer``.
 
     bring-your-own 배포 LLM(자체 서빙 Gemma/Solar 등). ``url``/``model`` 없고 env 도 없으면
@@ -384,7 +396,7 @@ def make_openai_judge_generate(
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 d = _json.load(r)
-            return d["choices"][0]["message"]["content"]
+            return str(d["choices"][0]["message"]["content"])
         except Exception:
             return err_ans
 
@@ -392,14 +404,14 @@ def make_openai_judge_generate(
 
 
 def make_harmful_cascade(
-    model_dir: "str | None" = None,
+    model_dir: str | None = None,
     *,
-    judge_generate: "Callable[[str, str], str] | None" = None,
+    judge_generate: Callable[[str, str], str] | None = None,
     lo: float | None = None,
     clf_threshold: float = 0.5,
     on_error: str = "safe",
-    **kw,
-):
+    **kw: Any,
+) -> dict[Category, Callable[[str], bool]]:
     """유해 4카테고리 **분류기→LLM-judge 캐스케이드** Tier-2 dict — *소프트 경계만* judge.
 
     ``make_harmful_tier2`` 의 상위판: 학습 분류기(recall 천장)에 **소프트/헷지 경계용 LLM-judge**
@@ -422,7 +434,7 @@ def make_harmful_cascade(
     필요하다. 배선은 endpoint-무관 opt-in 으로 제공하되 배포 시 judge 품질을 반드시 검증할 것.
     """
     import os
-    from .result import Category
+
     cats = (Category.ILLEGAL, Category.WEAPONS, Category.SELF_HARM, Category.UNSAFE_ADVICE)
 
     d = model_dir or os.environ.get("KO_HARMFUL_CLF_DIR")
@@ -432,7 +444,7 @@ def make_harmful_cascade(
         return {}
     lo = float(os.environ.get("KO_HARMFUL_JUDGE_LO", "0.15")) if lo is None else lo
 
-    out: dict = {}
+    out: dict[Category, Callable[[str], bool]] = {}
     for c in cats:
         judge = make_llm_judge(category=c, generate=gen) if gen is not None else None
         if clf is not None and judge is not None:
@@ -440,6 +452,7 @@ def make_harmful_cascade(
         elif clf is not None:
             out[c] = clf                     # judge 없음 → 분류기만(=make_harmful_tier2)
         else:
+            assert judge is not None
             out[c] = judge                   # 분류기 없음 → 매 출력 judge
     return out
 
@@ -465,17 +478,22 @@ def make_bge_encoder(
     tok = AutoTokenizer.from_pretrained(model)
     net = AutoModel.from_pretrained(model).eval().to(dev)
 
-    @torch.no_grad()
     def encode(texts: Sequence[str]) -> list[list[float]]:
         out: list[list[float]] = []
         texts = list(texts)
-        for i in range(0, len(texts), batch_size):
-            b = texts[i : i + batch_size]
-            enc = tok(b, padding=True, truncation=True, max_length=max_length,
-                      return_tensors="pt").to(dev)
-            h = net(**enc).last_hidden_state[:, 0]
-            h = torch.nn.functional.normalize(h, dim=-1)
-            out.extend(h.float().cpu().tolist())
+        with torch.no_grad():
+            for i in range(0, len(texts), batch_size):
+                b = texts[i : i + batch_size]
+                enc = tok(
+                    b,
+                    padding=True,
+                    truncation=True,
+                    max_length=max_length,
+                    return_tensors="pt",
+                ).to(dev)
+                h = net(**enc).last_hidden_state[:, 0]
+                h = torch.nn.functional.normalize(h, dim=-1)
+                out.extend(h.float().cpu().tolist())
         return out
 
     return encode

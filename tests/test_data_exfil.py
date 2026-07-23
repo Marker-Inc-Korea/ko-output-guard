@@ -1,9 +1,9 @@
 """data_exfil 탐지 — 마크다운/HTML 이미지·링크 데이터 유출 + 한국어 정상 FP 억제."""
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from ko_output_guard import Guard, Verdict
-from ko_output_guard.result import Category
 
 G = Guard()
 
@@ -50,5 +50,7 @@ def test_benign_no_exfil():
 
 
 if __name__ == "__main__":
-    test_image_exfil_blocked(); test_link_exfil_flagged(); test_benign_no_exfil()
+    test_image_exfil_blocked()
+    test_link_exfil_flagged()
+    test_benign_no_exfil()
     print("PASS data_exfil (공격 4/4 탐지, 정상 5/5 무탐)")

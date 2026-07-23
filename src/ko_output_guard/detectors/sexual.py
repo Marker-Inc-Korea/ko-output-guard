@@ -36,7 +36,7 @@ _SEED_PARTS = [
     "(?:초등학생|초딩|중딩|중학생|미성년자?|어린\\s*(?:애|아이|년|놈))(?:들)?[^.\\n]{0,12}(?:따먹|삽입|섹스|성관계|떡\\s*치|성적\\s*으로\\s*(?:만지|학대)|하고\\s*싶|몸\\s*파|임신시)",
     "(?:어린\\s*(?:애|아이|여자애|남자애)|미성년자?|아동)[^.\\n]{0,8}(?:야들야들|야동|성착취|성적\\s*학대|성\\s*노리개)",
 ]
-_SEEDS = re.compile("|".join("(?:%s)" % p for p in _SEED_PARTS))
+_SEEDS = re.compile("|".join(f"(?:{p})" for p in _SEED_PARTS))
 
 _CARVE_PARTS = [
     "성교육|성\\s*교육|학교\\s*보건\\s*교육|올바른\\s*성\\s*지식",
@@ -53,7 +53,7 @@ _CARVE_PARTS = [
     "스텐트\\s*삽입|카테터|도뇨관|기관\\s*삽관|삽관술|관을?\\s*삽입|튜브\\s*삽입|전극\\s*삽입|바늘\\s*삽입|보형물\\s*삽입|임플란트",
     "급성기|만성기|가속기|망막\\s*박리|박출(?:률|율)|타박상",
 ]
-_CARVEOUT = re.compile("|".join("(?:%s)" % p for p in _CARVE_PARTS)) if _CARVE_PARTS else None
+_CARVEOUT = re.compile("|".join(f"(?:{p})" for p in _CARVE_PARTS)) if _CARVE_PARTS else None
 
 
 def _sentence(text: str, start: int, end: int) -> str:

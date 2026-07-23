@@ -5,8 +5,9 @@
 """
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from ko_output_guard import Guard, make_harmful_tier2, Verdict
+from ko_output_guard import Guard, Verdict, make_harmful_tier2
 from ko_output_guard.policy import GuardPolicy
 from ko_output_guard.result import Category
 
@@ -41,5 +42,6 @@ def test_tier2_negative_keeps_benign_safe():
 if __name__ == "__main__":
     for fn in [test_no_op_without_weights_ml_free, test_tier2_boosts_recall_on_rule_miss,
                test_tier2_negative_keeps_benign_safe]:
-        fn(); print(f"PASS {fn.__name__}")
+        fn()
+        print(f"PASS {fn.__name__}")
     print("all passed")

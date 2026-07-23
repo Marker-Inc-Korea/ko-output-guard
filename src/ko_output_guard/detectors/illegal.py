@@ -36,7 +36,7 @@ _SEED_PARTS = [
     "(?:총기|사제\\s*총|총|권총)\\s*(?:을|를)?\\s*(?:밀매|밀수(?:하|입)|불법(?:으로)?\\s*(?:구(?:매|입)|거래)|파(?:는\\s*곳|시면))",
     "(?:크리덴셜\\s*스터핑|credential\\s*stuffing|피싱\\s*키트|익스플로잇|exploit|제로데이|0\\s*day|페이로드|payload)\\s*(?:을|를)?\\s*(?:만드|제작|작성|사용해|이용해)\\s*(?:공격|침투|해킹|탈취)",
 ]
-_SEEDS = re.compile("|".join("(?:%s)" % p for p in _SEED_PARTS))
+_SEEDS = re.compile("|".join(f"(?:{p})" for p in _SEED_PARTS))
 
 _CARVE_PARTS = [
     "보안\\s*(?:교육|훈련|인식|수칙|강화|점검|패치|업데이트)",
@@ -52,7 +52,7 @@ _CARVE_PARTS = [
     "처방(?:전|받|된|약)|의사(?:의)?\\s*(?:처방|지시)|병원(?:에서)?\\s*(?:치료|처방)|환자(?:의)?\\s*(?:투약|치료)|마취제|의료용",
     "(?:영화|드라마|소설|게임|웹툰)\\s*(?:에서|속|줄거리|장면|설정)",
 ]
-_CARVEOUT = re.compile("|".join("(?:%s)" % p for p in _CARVE_PARTS)) if _CARVE_PARTS else None
+_CARVEOUT = re.compile("|".join(f"(?:{p})" for p in _CARVE_PARTS)) if _CARVE_PARTS else None
 
 
 def _sentence(text: str, start: int, end: int) -> str:

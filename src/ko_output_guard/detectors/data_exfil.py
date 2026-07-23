@@ -68,7 +68,7 @@ def scan_data_exfil(text: str) -> list[Violation]:
     out: list[Violation] = []
     seen: set[tuple[int, int]] = set()
 
-    def add(m, kind: str, sev: Severity, zero_click: bool):
+    def add(m: re.Match[str], kind: str, sev: Severity, zero_click: bool) -> None:
         url = m.group("url")
         if not _url_exfil(url, zero_click):
             return

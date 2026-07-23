@@ -484,6 +484,25 @@ def _scan_deobf_email(text: str) -> list[Violation]:
     return out
 
 
+def _append_bulk_email_violation(violations: list[Violation]) -> list[Violation]:
+    """Escalate three or more distinct email addresses, regardless of backend."""
+    distinct_emails = {
+        (violation.matched or "").lower()
+        for violation in violations
+        if violation.code == "pii:email" and violation.matched
+    }
+    if len(distinct_emails) >= 3:
+        violations.append(
+            Violation(
+                code="pii:email_bulk",
+                category=Category.PII_LEAK,
+                severity=Severity.HIGH,
+                reason=f"bulk email leak: {len(distinct_emails)} distinct emails in one output",
+            )
+        )
+    return violations
+
+
 def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
     # 부분 주민번호(뒷 7 / 앞 6) + 라벨-앵커 카드/사업자번호는 순수 정규식이라 ko-pii
     # 미설치여도 잡는다 — 라벨이 명시된 경우만이므로 비식별 자체가 결정적. 먼저 수집해
@@ -508,10 +527,10 @@ def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
         if not _DEGRADED_WARNED:
             _log.warning(
                 "ko-pii not installed: PII leak detection is DEGRADED "
-                "(only label-anchored partial RRN is checked). GuardResult.degraded=True."
+                "(only built-in partial detectors are active). GuardResult.degraded=True."
             )
             _DEGRADED_WARNED = True
-        return partial  # ko-pii 미설치 → 부분 RRN 만 보강(다른 detector 는 계속)
+        return _append_bulk_email_violation(partial)
     conn_spans = [(m.start(), m.end()) for m in _CONN_USERINFO.finditer(text)]
     out: list[Violation] = []
     kopii_spans: list[tuple[int, int]] = []
@@ -581,14 +600,4 @@ def scan_pii_leak(text: str, *, strict: bool = False) -> list[Violation]:
     # 이메일 단건은 MEDIUM(설계상 FLAG)이지만, 한 응답에 서로 다른 이메일이 3개 이상이면
     # 연락처 일괄 누출(명단 덤프) 신호이므로 HIGH 집계 위반을 1개 추가해 BLOCK 으로 승격한다.
     # 같은 주소 반복은 1개로 센다(distinct). 전화는 대표번호/안내 등 비-개인 비중이 커 제외.
-    distinct_emails = {
-        (v.matched or "").lower()
-        for v in out
-        if v.code == "pii:email" and v.matched
-    }
-    if len(distinct_emails) >= 3:
-        out.append(Violation(
-            code="pii:email_bulk", category=Category.PII_LEAK, severity=Severity.HIGH,
-            reason=f"bulk email leak: {len(distinct_emails)} distinct emails in one output",
-        ))
-    return out
+    return _append_bulk_email_violation(out)

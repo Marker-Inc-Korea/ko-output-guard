@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ko-output-guard"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deterministic Korean LLM output safety guard — secret/PII leak, unsafe-advice (MFDS), toxicity, prompt-leak"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "mk04" }]
 keywords = ["korean", "llm", "output-guard", "safety", "pii", "secret", "guardrail", "mfds"]
 classifiers = [
@@ -48,6 +49,9 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "src/ko_output_guard/detectors/secret.py" = ["E501"]
 "src/ko_output_guard/detectors/unsafe_advice.py" = ["E501"]
+# Reviewer documentation and literal adversarial fixtures are intentionally dense.
+"src/ko_output_guard/reviewers.py" = ["E501"]
+"tests/**" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -57,4 +61,8 @@ files = ["src"]
 # ko-pii / ko-prompt-guard 는 optional 의존성 — 미설치 환경에서도 타입체크가 통과해야.
 [[tool.mypy.overrides]]
 module = ["ko_pii", "ko_pii.*", "ko_prompt_guard", "ko_prompt_guard.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["torch", "transformers", "transformers.*"]
 ignore_missing_imports = true

@@ -12,6 +12,7 @@ import re
 import unicodedata
 
 _INVISIBLE = re.compile(r"[​-‏‪-‮⁠-⁯﻿­]")
+_SENTENCE_BOUNDARY = re.compile(r"([.!?\n]+)")
 
 
 def _light_fallback(text: str) -> str:
@@ -29,6 +30,14 @@ def normalize_for_detection(text: str) -> str:
         from ko_prompt_guard import GuardPolicy
         from ko_prompt_guard.normalize import normalize
 
-        return str(normalize(text, GuardPolicy())[0])
+        # The input guard intentionally removes punctuation while de-obfuscating.
+        # Output detectors use sentence boundaries for safety-warning carve-outs,
+        # so normalize each sentence independently and retain its delimiters.
+        parts = _SENTENCE_BOUNDARY.split(text)
+        policy = GuardPolicy()
+        return "".join(
+            part if index % 2 else str(normalize(part, policy)[0])
+            for index, part in enumerate(parts)
+        )
     except ImportError:
         return _light_fallback(text)

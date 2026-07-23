@@ -34,7 +34,7 @@ _SEED_PARTS = [
     "테러(?:를\\s*)?(?:저지르|일으키|하는\\s*법|모의)|폭탄(?:을)?\\s*터(?:뜨려|트려)\\s*[^.\\n]{0,8}?(?:사람|군중|많이\\s*죽)|차량(?:으로|을\\s*몰아)\\s*[^.\\n]{0,6}?(?:돌진|들이받아\\s*죽|인파)",
     "죽(?:고\\s*싶으면|을\\s*준비)\\s*(?:해|되|덤벼)|뒤지고\\s*싶|뒤질래|관(?:짝|에)\\s*(?:들어갈|넣어)|땅에\\s*묻(?:어\\s*버|어\\s*줄|혀)",
 ]
-_SEEDS = re.compile("|".join("(?:%s)" % p for p in _SEED_PARTS))
+_SEEDS = re.compile("|".join(f"(?:{p})" for p in _SEED_PARTS))
 
 _CARVE_PARTS = [
     "(?:뉴스|보도|기사|속보|단독|특보|연합뉴스|YTN|경찰\\s*(?:발표|조사|수사)|검찰|구속영장|입건|체포(?:됐|되었|돼))",
@@ -49,7 +49,7 @@ _CARVE_PARTS = [
     "(?:절대\\s*안\\s*되|해서는\\s*안|하면\\s*안\\s*돼|폭력은\\s*(?:나쁜|범죄|안)|용납(?:될|되지)\\s*않|규탄|비판(?:받|한다)|근절(?:해|하자|해야))",
     "친화형|평화형|친화\\s*형|(?:형|모형|유형|화형)\\s*(?:라벨|정보|제품)",
 ]
-_CARVEOUT = re.compile("|".join("(?:%s)" % p for p in _CARVE_PARTS)) if _CARVE_PARTS else None
+_CARVEOUT = re.compile("|".join(f"(?:{p})" for p in _CARVE_PARTS)) if _CARVE_PARTS else None
 
 
 def _sentence(text: str, start: int, end: int) -> str:

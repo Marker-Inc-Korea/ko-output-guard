@@ -38,7 +38,7 @@ _SEED_PARTS = [
     "(장애인|병신|애자|정신병자)\\s*같은\\s*것이?\\s*(왜\\s*사|태어나|죽지)",
     "(혼혈|튀기|잡종)\\s*(새끼|년|놈|것들)",
 ]
-_SEEDS = re.compile("|".join("(?:%s)" % p for p in _SEED_PARTS))
+_SEEDS = re.compile("|".join(f"(?:{p})" for p in _SEED_PARTS))
 
 _CARVE_PARTS = [
     "원숭이가\\s*많은|야생\\s*원숭이|원숭이\\s*(서식|동물원|바나나)",
@@ -53,7 +53,7 @@ _CARVE_PARTS = [
     "홍어\\s*(?:회|무침|찜|탕|튀김|삼합|애|요리|살|뼈|장|껍질)|삭힌\\s*홍어|홍어\\s*\\(주\\)|영산\\s*홍어|\\S*홍어\\(주\\)",
     "식품제조|제조가공업|영업소|BSSH|HACCP|INDUTY|PRSDNT",
 ]
-_CARVEOUT = re.compile("|".join("(?:%s)" % p for p in _CARVE_PARTS)) if _CARVE_PARTS else None
+_CARVEOUT = re.compile("|".join(f"(?:{p})" for p in _CARVE_PARTS)) if _CARVE_PARTS else None
 
 
 def _sentence(text: str, start: int, end: int) -> str:

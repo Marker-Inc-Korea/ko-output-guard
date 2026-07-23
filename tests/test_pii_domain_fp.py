@@ -8,11 +8,18 @@ ko-pii 무수정 + 가드측 _EXCLUDE/대표번호 필터로 억제. ko-pii 위�
 """
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 from ko_output_guard import Category, Guard
 
 G = Guard()
+
+needs_kopii = pytest.mark.skipif(
+    importlib.util.find_spec("ko_pii") is None,
+    reason="ko-pii not installed; full PII detection is disabled (no-op)",
+)
 
 
 def _has_pii(t: str) -> bool:
@@ -50,5 +57,6 @@ PII_REAL = [
 
 
 @pytest.mark.parametrize("t", PII_REAL, ids=lambda s: s[:24])
+@needs_kopii
 def test_pii_real_still_detected(t: str) -> None:
     assert _has_pii(t), t

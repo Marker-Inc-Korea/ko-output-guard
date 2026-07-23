@@ -105,8 +105,10 @@ class Guard:
 
             def _model_says(cat: Category) -> bool:
                 if cat not in _verdict_cache:
-                    probe = text if cat in (Category.SECRET_LEAK, Category.PII_LEAK) else norm
-                    _verdict_cache[cat] = bool(self.tier2[cat](probe))
+                    # Semantic reviewers consume the model's original output.
+                    # Aggressive detector normalization can collapse meaningful
+                    # Korean spacing and changes the reviewer input contract.
+                    _verdict_cache[cat] = bool(self.tier2[cat](text))
                 return _verdict_cache[cat]
 
             if p.tier2_vet:
@@ -114,7 +116,8 @@ class Guard:
                 for v in violations:
                     if v.ambiguous and v.category in self.tier2:
                         if _model_says(v.category):
-                            vetted.append(v.model_copy(update={"ambiguous": False}))  # confirmed→certain
+                            # A positive Tier-2 result confirms the ambiguous hit.
+                            vetted.append(v.model_copy(update={"ambiguous": False}))
                         # else: 모델이 부정 → 드롭(FP 제거)
                     else:
                         vetted.append(v)
@@ -137,9 +140,7 @@ class Guard:
             if v.severity < p.min_block_severity or v.category not in p.block_categories:
                 return False
             # 모델 미확인 ambiguous 는 정밀-우선 모드에서 BLOCK 하지 않고 FLAG 로 둔다.
-            if v.ambiguous and not p.block_unconfirmed_ambiguous:
-                return False
-            return True
+            return not (v.ambiguous and not p.block_unconfirmed_ambiguous)
 
         blocking = [v for v in violations if _can_block(v)]
         if blocking:

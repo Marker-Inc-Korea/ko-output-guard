@@ -11,7 +11,6 @@ from ko_output_guard import (
     Guard,
     GuardPolicy,
     MultiLabelClassifierTier2,
-    Verdict,
 )
 
 # 라벨 인덱스: SEXUAL0 VIOLENCE1 HATE2 TOXICITY3

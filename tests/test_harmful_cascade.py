@@ -9,15 +9,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from ko_output_guard import (  # noqa: E402
-    CascadeTier2, Guard, Verdict, make_harmful_cascade, make_openai_judge_generate,
+    CascadeTier2,
+    Guard,
+    Verdict,
+    make_harmful_cascade,
+    make_openai_judge_generate,
 )
 from ko_output_guard.policy import GuardPolicy  # noqa: E402
 from ko_output_guard.result import Category  # noqa: E402
 
 
 class _MockClf:
-    def __init__(self, p, threshold=0.5): self._p = p; self.threshold = threshold
-    def prob(self, text): return self._p
+    def __init__(self, p, threshold=0.5):
+        self._p = p
+        self.threshold = threshold
+
+    def prob(self, text):
+        return self._p
 
 
 def _counting_judge(verdict):
@@ -92,5 +100,6 @@ if __name__ == "__main__":
                test_soft_boundary_escalates_to_judge, test_no_op_without_config_ml_free,
                test_judge_only_when_no_classifier, test_cascade_wires_into_guard_recall,
                test_on_error_fallback]:
-        fn(); print(f"PASS {fn.__name__}")
+        fn()
+        print(f"PASS {fn.__name__}")
     print("all passed")
