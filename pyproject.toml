@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ko-output-guard"
-version = "0.2.0rc1"
+version = "0.2.0"
 description = "Deterministic Korean LLM output safety guard — secret/PII leak, unsafe-advice (MFDS), toxicity, prompt-leak"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "mk04" }]
 keywords = ["korean", "llm", "output-guard", "safety", "pii", "secret", "guardrail", "mfds"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Natural Language :: Korean",
     "Programming Language :: Python :: 3",

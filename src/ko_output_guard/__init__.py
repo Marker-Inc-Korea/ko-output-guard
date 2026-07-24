@@ -32,7 +32,7 @@ from .reviewers import (
     make_openai_judge_generate,
 )
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __all__ = [
     "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
     "Verdict", "Category", "Severity", "Violation",
