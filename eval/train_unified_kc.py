@@ -10,13 +10,16 @@ import numpy as np, torch
 import torch.nn.functional as Fnn
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           Trainer, TrainingArguments)
+
+from _paths import EVAL_ROOT, KO_PII_EVAL_ROOT, eval_path
+
 random.seed(13)
 CATS = ["SEXUAL", "VIOLENCE", "HATE", "TOXICITY"]
 MODEL = os.environ.get("BASE_MODEL", "beomi/KcELECTRA-base-v2022")
-OUTDIR = os.environ.get("OUT_DIR", "/data1/mk04/eval_external/unified_kc")
-D = "/data1/mk04/eval_external"
+OUTDIR = os.environ.get("OUT_DIR", eval_path("unified_kc"))
+D = str(EVAL_ROOT)
 AHUB = f"{D}/aihub_ethics/147.텍스트_윤리검증_데이터/01.데이터/2.Validation/라벨링데이터/aihub/extracted"
-EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
+EVAL = str(KO_PII_EVAL_ROOT)
 QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
 HATE_COLS = ["여성/가족", "남성", "성소수자", "인종/국적", "연령", "지역", "종교", "기타 혐오"]

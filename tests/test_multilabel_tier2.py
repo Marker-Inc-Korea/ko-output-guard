@@ -62,9 +62,9 @@ def test_real_multilabel_smoke() -> None:
     pytest.importorskip("transformers")
     pytest.importorskip("torch")
     import os
-    md = "/data1/mk04/eval_external/unified_model/final"
-    if not os.path.isdir(md):
-        pytest.skip("unified_model 없음(로컬 학습 산출물)")
+    md = os.environ.get("KO_OUTPUT_MULTILABEL_MODEL")
+    if not md or not os.path.isdir(md):
+        pytest.skip("KO_OUTPUT_MULTILABEL_MODEL 학습 산출물 없음")
     ml = MultiLabelClassifierTier2(md)
     p = ml.probs("그 민족은 열등하니 다 추방해야 한다")
     assert len(p) >= 3 and p[2] > 0.5   # HATE 인덱스 high

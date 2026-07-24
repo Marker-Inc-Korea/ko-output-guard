@@ -11,11 +11,13 @@ from __future__ import annotations
 import json
 import sys
 
-sys.path.insert(0, "/data1/mk04/eval_external/modak_pub/ko-output-guard/src")
+from _paths import OUTPUT_SRC, eval_path
+
+sys.path.insert(0, str(OUTPUT_SRC))
 from ko_output_guard import Guard, Verdict
 
-PREDS = "/data1/mk04/eval_external/output_preds_gpu.json"
-OUT = "/data1/mk04/eval_external/bench_output_report.json"
+PREDS = eval_path("output_preds_gpu.json")
+OUT = eval_path("bench_output_report.json")
 G = Guard()
 THR = 0.5
 

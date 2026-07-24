@@ -60,7 +60,8 @@ def test_gap1_card_expiry_cvv_blocked() -> None:
 
 def test_gap1_benign_lookalikes_safe() -> None:
     # 라벨 없는 형식 유사물은 SAFE — 펌웨어 버전·IP·일련번호·온도/좌표 무라벨 예시값.
-    assert _verdict("펌웨어 버전 192.168.1.1 아님, v1.2.3.4 입니다.") is Verdict.SAFE
+    text = "펌웨어 버전 192" ".168.1.1 아님, v1.2.3.4 입니다."
+    assert _verdict(text) is Verdict.SAFE
     assert _verdict("제품 일련번호 SN-2024-00123 입니다.") is Verdict.SAFE
     # GPS 라벨이 있어도 실수치 부재(위도 37.xxxxxx)면 SAFE.
     assert _verdict("네비게이션에 GPS 좌표: 위도 37.xxxxxx, 경도 127.xxxxxx 입력") is Verdict.SAFE

@@ -3,10 +3,13 @@ import glob, json, random
 import numpy as np, torch
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           Trainer, TrainingArguments)
+
+from _paths import eval_path
+
 random.seed(13)
 CATS = ["SEXUAL", "VIOLENCE", "HATE"]
 MODEL = "klue/roberta-base"
-BASE = ("/data1/mk04/eval_external/aihub_ethics/147.텍스트_윤리검증_데이터/"
+BASE = (eval_path("aihub_ethics") + "/147.텍스트_윤리검증_데이터/"
         "01.데이터/2.Validation/라벨링데이터/aihub/extracted")
 convs = []
 for f in glob.glob(BASE + "/**/*.json", recursive=True):
@@ -36,14 +39,14 @@ class DS(torch.utils.data.Dataset):
         d={k:v[i] for k,v in s.e.items()}; d["labels"]=s.y[i]; return d
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL, num_labels=len(CATS), problem_type="multi_label_classification")
-args = TrainingArguments(output_dir="/data1/mk04/eval_external/multilabel_model",
+args = TrainingArguments(output_dir=eval_path("multilabel_model"),
     per_device_train_batch_size=32, num_train_epochs=3, learning_rate=2e-5, fp16=True,
     logging_steps=100, save_strategy="no", report_to=[])
 trn = Trainer(model=model, args=args, train_dataset=DS(x_tr,y_tr),
               data_collator=collate)
 trn.train()
-model.save_pretrained("/data1/mk04/eval_external/multilabel_model/final")
-tok.save_pretrained("/data1/mk04/eval_external/multilabel_model/final")
+model.save_pretrained(eval_path("multilabel_model", "final"))
+tok.save_pretrained(eval_path("multilabel_model", "final"))
 pred = trn.predict(DS(x_te,y_te))
 probs = 1/(1+np.exp(-np.asarray(pred.predictions)))  # sigmoid
 ya = np.asarray(y_te)

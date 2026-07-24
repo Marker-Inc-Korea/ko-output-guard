@@ -9,10 +9,13 @@ import numpy as np, torch
 import torch.nn.functional as Fnn
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           Trainer, TrainingArguments)
+
+from _paths import EVAL_ROOT, pii_path
+
 random.seed(13)
 CATS = ["SEXUAL", "VIOLENCE", "HATE", "TOXICITY"]
 MODEL = "klue/roberta-base"
-D = "/data1/mk04/eval_external"
+D = str(EVAL_ROOT)
 AHUB = f"{D}/aihub_ethics/147.텍스트_윤리검증_데이터/01.데이터/2.Validation/라벨링데이터/aihub/extracted"
 HATE_COLS = ["여성/가족", "남성", "성소수자", "인종/국적", "연령", "지역", "종교", "기타 혐오"]
 
@@ -104,6 +107,10 @@ score("VIOLENCE", 1, [a for a,_ in ah_te], [b[1] for _,b in ah_te])
 score("HATE", 2, [a for a,_ in us_va], [b[2] for _,b in us_va])
 score("TOXICITY", 3, [a for a,_ in us_va], [b[3] for _,b in us_va])
 # HATE: KMHAS cross-dataset
-km = [json.loads(l) for l in open("/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external/tox_kmhas.jsonl") if l.strip()]
+km = [
+    json.loads(line)
+    for line in open(pii_path("tox_kmhas.jsonl"))
+    if line.strip()
+]
 score("HATE(KMHAS)", 2, [r["text"] for r in km], [1 if str(r.get("label"))=="1" else 0 for r in km])
 print("DONE_UNIFIED")

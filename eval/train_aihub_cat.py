@@ -8,10 +8,13 @@ import sys, glob, json, random
 import numpy as np, torch
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           DataCollatorWithPadding, Trainer, TrainingArguments)
+
+from _paths import eval_path
+
 random.seed(13)
 CAT = sys.argv[1]
 MODEL = "klue/roberta-base"
-BASE = ("/data1/mk04/eval_external/aihub_ethics/147.텍스트_윤리검증_데이터/"
+BASE = (eval_path("aihub_ethics") + "/147.텍스트_윤리검증_데이터/"
         "01.데이터/2.Validation/라벨링데이터/aihub/extracted")
 
 convs = []
@@ -42,7 +45,7 @@ class DS(torch.utils.data.Dataset):
         d = {k: v[i] for k, v in s.e.items()}; d["labels"] = s.y[i]; return d
 
 model = AutoModelForSequenceClassification.from_pretrained(MODEL, num_labels=2)
-out = f"/data1/mk04/eval_external/{CAT.lower()}_model"
+out = eval_path(f"{CAT.lower()}_model")
 args = TrainingArguments(output_dir=out, per_device_train_batch_size=32, num_train_epochs=3,
                          learning_rate=2e-5, fp16=True, logging_steps=100, save_strategy="no", report_to=[])
 trn = Trainer(model=model, args=args, train_dataset=DS(x_tr, y_tr),

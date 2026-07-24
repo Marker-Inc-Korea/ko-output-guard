@@ -9,7 +9,9 @@ import numpy as np, torch
 from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
                           DataCollatorWithPadding, Trainer, TrainingArguments)
 
-D = "/data1/mk04/eval_external"
+from _paths import EVAL_ROOT
+
+D = str(EVAL_ROOT)
 MODEL = "klue/roberta-base"
 HATE_COLS = ["여성/가족", "남성", "성소수자", "인종/국적", "연령", "지역", "종교", "기타 혐오"]
 

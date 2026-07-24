@@ -18,13 +18,15 @@ import torch
 from transformers import (AutoModelForCausalLM, AutoModelForSequenceClassification,
                           AutoTokenizer)
 
-EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
+from _paths import KO_PII_EVAL_ROOT, eval_path
+
+EVAL = str(KO_PII_EVAL_ROOT)
 QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
-OUT = "/data1/mk04/eval_external/output_preds_gpu.json"
+OUT = eval_path("output_preds_gpu.json")
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 
-UNIFIED = "/data1/mk04/eval_external/unified_model/final"   # SEXUAL0 VIOLENCE1 HATE2 TOXICITY3
+UNIFIED = eval_path("unified_model", "final")   # SEXUAL0 VIOLENCE1 HATE2 TOXICITY3
 KOR_UNSMILE = "smilegate-ai/kor_unsmile"                    # 0-8 toxic, 9 clean (multi-label)
 DETOX = "unitary/multilingual-toxic-xlm-roberta"           # {0:toxic}
 LLAMA_GUARD = "meta-llama/Llama-Guard-3-1B"
@@ -39,7 +41,11 @@ def load_datasets():
         rows = [json.loads(l) for l in open(f"{EVAL}/{name}.jsonl") if l.strip()]
         ds[name] = ([r["text"] for r in rows], [int(r["label"]) for r in rows])
     # K-HATERS (humane-lab, native 한국어 hate, held-out — 2023, 신규 추가)
-    kh = [json.loads(l) for l in open("/data1/mk04/eval_external/khaters_test.jsonl") if l.strip()]
+    kh = [
+        json.loads(line)
+        for line in open(eval_path("khaters_test.jsonl"))
+        if line.strip()
+    ]
     ds["khaters"] = ([r["text"] for r in kh], [int(r["label"]) for r in kh])
     # 의료 benign (qtaoa 최종 답변)
     med = []

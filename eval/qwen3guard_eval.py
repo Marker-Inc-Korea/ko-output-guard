@@ -20,9 +20,11 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from _paths import eval_path
+
 MODEL = os.environ.get("QWEN3GUARD", "Qwen/Qwen3Guard-Gen-4B")
-INP = "/data1/mk04/eval_external/qwen3guard_eval_input.jsonl"
-OUT = "/data1/mk04/eval_external/qwen3guard_report.json"
+INP = eval_path("qwen3guard_eval_input.jsonl")
+OUT = eval_path("qwen3guard_report.json")
 
 _SAFE = re.compile(r"Safety:\s*(Safe|Unsafe|Controversial)")
 _CATS = re.compile(r"(Violent|Non-violent Illegal Acts|Sexual Content or Sexual Acts|PII|"

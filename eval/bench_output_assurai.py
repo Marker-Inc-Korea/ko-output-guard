@@ -21,7 +21,11 @@ import os
 import re
 import numpy as np
 
-CLF_DIR = os.environ.get("KO_OUT_CLF_DIR", "/data1/mk04/eval_external/unified_kc/final")
+from _paths import eval_path
+
+CLF_DIR = os.environ.get(
+    "KO_OUT_CLF_DIR", eval_path("unified_kc", "final")
+)
 QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
 RISKY_MIN = 4   # output risk >=4 → 유해 콘텐츠 생산
@@ -145,7 +149,7 @@ def main():
     report["medical_fpr"] = round(float(guard_flags(med).mean() * 100), 2)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    json.dump(report, open("/data1/mk04/eval_external/assurai_report.json", "w"),
+    json.dump(report, open(eval_path("assurai_report.json"), "w"),
               ensure_ascii=False, indent=2)
     print("ASSURAI_DONE")
 

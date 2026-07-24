@@ -12,10 +12,12 @@ import numpy as np
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-INP = "/data1/mk04/eval_external/qwen3guard_eval_input.jsonl"
-V6 = "/data1/mk04/eval_external/ko_injection_guard_v8/final"
-KC = "/data1/mk04/eval_external/unified_kc/final"
-OUT = "/data1/mk04/eval_external/ko_guard_3axis_report.json"
+from _paths import OUTPUT_SRC, PROMPT_SRC, eval_path
+
+INP = eval_path("qwen3guard_eval_input.jsonl")
+V6 = eval_path("ko_injection_guard_v8", "final")
+KC = eval_path("unified_kc", "final")
+OUT = eval_path("ko_guard_3axis_report.json")
 
 rows = [json.loads(l) for l in open(INP) if l.strip()]
 
@@ -52,7 +54,7 @@ rep = {"suite": "ko-guard (prompt+output)"}
 
 # --- injection: ko-prompt-guard 룰 + v6 분류기 (hybrid) ---
 import sys
-sys.path.insert(0, "/data1/mk04/eval_external/modak_pub/ko-prompt-guard/src")
+sys.path.insert(0, str(PROMPT_SRC))
 from ko_prompt_guard import Guard as PGuard, Verdict as PVerdict
 itx, iy = by_axis("injection")
 pg = PGuard()
@@ -62,7 +64,7 @@ rep["injection"] = rc_fpr(rule_flag | clf, iy)
 print("[injection]", rep["injection"], flush=True)
 
 # --- toxicity: ko-output-guard 룰 + KcELECTRA ---
-sys.path.insert(0, "/data1/mk04/eval_external/modak_pub/ko-output-guard/src")
+sys.path.insert(0, str(OUTPUT_SRC))
 from ko_output_guard import Guard as OGuard, Verdict as OVerdict
 ttx, ty = by_axis("toxicity")
 og = OGuard()

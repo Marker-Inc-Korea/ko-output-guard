@@ -11,10 +11,12 @@ import os
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
+from _paths import KO_PII_EVAL_ROOT, eval_path
+
+EVAL = str(KO_PII_EVAL_ROOT)
 QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
-OUT = "/data1/mk04/eval_external/toxbert_report.json"
+OUT = eval_path("toxbert_report.json")
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 THR = 0.5
 

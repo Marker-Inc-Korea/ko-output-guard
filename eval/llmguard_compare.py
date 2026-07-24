@@ -14,11 +14,13 @@ import glob
 import json
 import os
 
-SETS = "/data1/mk04/eval_external/prompt_eval_sets.json"
-EVAL = "/data1/mk04/projects/ko-pii/experiments/ko-output-guard/eval/external"
+from _paths import KO_PII_EVAL_ROOT, eval_path
+
+SETS = eval_path("prompt_eval_sets.json")
+EVAL = str(KO_PII_EVAL_ROOT)
 QTAOA = os.environ.get("KO_GUARD_BENIGN_CORPUS",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures/benign_ko_sample.jsonl"))
-OUT = "/data1/mk04/eval_external/llmguard_report.json"
+OUT = eval_path("llmguard_report.json")
 
 
 def metrics(flags, labels):

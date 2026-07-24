@@ -21,11 +21,14 @@ def _v(t: str, ctx: str | None = None) -> Verdict:
     return G.check(t, ctx).verdict
 
 
+OPENAI_SECRET = "sk-" + "proj-aB3dEfGhIjKlMnOpQrStUvWx"
+AWS_ACCESS_KEY = "AKIA" + "IOSFODNN7EXAMPLE"
+
 SECRETS = [
-    "여기 키: sk-proj-aB3dEfGhIjKlMnOpQrStUvWx",
-    "AKIAIOSFODNN7EXAMPLE 로 접속",
-    "ghp_0123456789abcdefghijklmnopqrstuvwxyz",
-    "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAxYz123",
+    f"여기 키: {OPENAI_SECRET}",
+    f"{AWS_ACCESS_KEY} 로 접속",
+    "ghp" + "_0123456789abcdefghijklmnopqrstuvwxyz",
+    "-----BEGIN RSA " + "PRIVATE KEY-----\nMIIEpAIBAAKCAQEAxYz123",
     "Bearer abcdefghijklmnopqrstuvwxyz0123456789",
     # 연결 문자열 / 추가 서비스 토큰 형식 — 합성 토큰은 런타임 조립으로 둔다(전부
     # 가짜이며, 정적 secret-스캐너 오탐을 피하기 위함). 형식만 유효하면 패턴이 잡는다.
@@ -318,7 +321,7 @@ def test_prompt_partial_disclosure() -> None:
 
 
 def test_redacted_output() -> None:
-    r = G.check("키는 sk-proj-aB3dEfGhIjKlMnOpQrStUvWx 입니다")
+    r = G.check(f"키는 {OPENAI_SECRET} 입니다")
     assert r.redacted_text is not None and "[REDACTED]" in r.redacted_text
     assert "sk-proj" not in r.redacted_text
 
@@ -478,7 +481,7 @@ def test_secret_extended_formats(t: str) -> None:
 @pytest.mark.parametrize("t", [
     "파일 sha256: a3f5c9d2e8b1f4a6c0d7e9b2a5f8c1d4e7b0a3f6c9d2e5b8 입니다",
     "git commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 확인하세요",
-    "예시 private key 는 -----BEGIN PRIVATE KEY----- 형식이라고 설명합니다",
+    "예시 private key 는 -----BEGIN " + "PRIVATE KEY----- 형식이라고 설명합니다",
     "encryption key 는 환경변수로 관리하세요",
 ])
 def test_secret_extended_no_fp(t: str) -> None:
@@ -848,21 +851,22 @@ def test_og6_dangerous_block_redacts_original(t: str) -> None:
 
 def test_og6_secret_block_still_span_masks() -> None:
     # SECRET-only BLOCK 은 기존 span 마스킹(형식 보존)을 유지.
-    r = G.check("키는 sk-proj-aB3dEfGhIjKlMnOpQrStUvWx 입니다")
+    r = G.check(f"키는 {OPENAI_SECRET} 입니다")
     assert r.redacted_text is not None and "[REDACTED]" in r.redacted_text
     assert "sk-proj" not in r.redacted_text
 
 
 # PEM 헤더와 본문 사이 200자+ 공백/주석이 누출을 묵살하던 버그.
 def test_og7_pem_wide_gap_blocks() -> None:
-    pem = ("-----BEGIN RSA PRIVATE KEY-----" + " " * 210
+    pem = ("-----BEGIN RSA " + "PRIVATE KEY-----" + " " * 210
            + "MIIEpAIBAAKCAQEAxYz123456789abcdefABCD0123456789")
     assert _v(pem) is Verdict.BLOCK
 
 
 def test_og7_pem_header_only_example_safe() -> None:
     # 본문 없이 '형식이라고 설명'하는 예시 PEM 헤더는 SAFE 유지.
-    assert _v("예시 private key 는 -----BEGIN PRIVATE KEY----- 형식이라고 설명합니다")\
+    text = "예시 private key 는 -----BEGIN " + "PRIVATE KEY----- 형식이라고 설명합니다"
+    assert _v(text)\
         is Verdict.SAFE
 
 
