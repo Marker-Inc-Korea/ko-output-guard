@@ -331,21 +331,21 @@ def _scan_hangul_digit_pii(text: str) -> list[Violation]:
         idx_map: list[int] = []
         base = run.start()
         for i, ch in enumerate(seg):
-            d = _HANGUL_DIGIT.get(ch)
-            if d is not None:
-                folded_chars.append(d)
+            digit = _HANGUL_DIGIT.get(ch)
+            if digit is not None:
+                folded_chars.append(digit)
                 idx_map.append(base + i)
         if len(folded_chars) < 6:
             continue
         folded = "".join(folded_chars)
-        for d in detect_all(folded, include=("RRN", "PHONE")):
-            risk = getattr(getattr(d, "risk_level", None), "name", "MEDIUM")
+        for detection in detect_all(folded, include=("RRN", "PHONE")):
+            risk = getattr(getattr(detection, "risk_level", None), "name", "MEDIUM")
             out.append(Violation(
-                code=f"pii:{d.label.lower()}", category=Category.PII_LEAK,
+                code=f"pii:{detection.label.lower()}", category=Category.PII_LEAK,
                 severity=_RISK_TO_SEV.get(risk, Severity.MEDIUM),
-                reason=f"personal data via Hangul-digit obfuscation: {d.label}",
-                start=idx_map[d.start], end=idx_map[d.end - 1] + 1,
-                matched=d.text[:40],
+                reason=f"personal data via Hangul-digit obfuscation: {detection.label}",
+                start=idx_map[detection.start], end=idx_map[detection.end - 1] + 1,
+                matched=detection.text[:40],
             ))
     return out
 
