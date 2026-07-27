@@ -455,7 +455,7 @@ def test_secret_promptleak_no_fp(t: str) -> None:
 
 
 @pytest.mark.parametrize("t", [
-    "Authorization: Bearer ya29.REDACTED_TEST",
+    "Authorization: Bearer ya29." + "aXYZ7kLmNopQrStUvWx12345AbCdEfGhIjKlMn",
     "DB: postgres://admin:Xk9fL2mQ8vRt@prod-db.internal:5432/app",
     "인증값 토큰: Zx9KdEf456GhI789jKlM012nOpQr 입니다",       # base64형 blob, 예시 맥락 없음
 ])
@@ -465,13 +465,13 @@ def test_secret_still_caught(t: str) -> None:
 
 @pytest.mark.parametrize("t", [
     "-----begin rsa private key-----\nMIIEpAIBAAKCAQEAxYz123456789abcdef\n-----end",  # 소문자
-    "refresh_token: 1//REDACTED_TEST",  # GCP OAuth refresh
-    "Authorization uses ya29.REDACTED_TEST",       # GCP OAuth access
+    "refresh_token: 1//" + "0gK9xYzAbCdEfGhIjKlMnOpQrStUvWxYz123456789",  # GCP OAuth
+    "Authorization uses ya29." + "a0AfH6SMBxAbcDefGhIjKlMnOpQrStUv",  # GCP access
     "SLACK_REFRESH=xox" + "e-1-My8yMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg",  # Slack refresh(조립)
-    "STRIPE_KEY=sk_test_REDACTED_TEST",            # Stripe test
+    "STRIPE_KEY=sk_" + "test_4eC39HqLyjWDarjtT1zdp7dcABCDEFGH",     # Stripe test
     "DB_ENCRYPTION_SECRET 4a7d1ed414474e4033ac29ccb8653d9b8f7e6a5b",  # labeled hex
     '{"auths":{"r.io":{"auth":"YWRtaW46c3VwZXJzZWNyZXRwdzEyMw=="}}}',  # docker auth
-    "export AWS_ACCESS_KEY_ID=ASIA_REDACTED_TEST",                  # AWS STS
+    "export AWS_ACCESS_KEY_ID=ASIA" + "Y34FZKBOKMUTVV7A",           # AWS STS
     "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OD",  # 2-seg JWT
 ])
 def test_secret_extended_formats(t: str) -> None:

@@ -20,6 +20,8 @@ from ko_output_guard import Guard
 from ko_output_guard.result import Verdict
 
 GUARD = Guard()
+STRIPE_WEBHOOK_SECRET = "whsec_" + "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+TWILIO_ACCOUNT_SID = "AC" + ("1234567890abcdef" * 2)
 
 
 # --- FIXABLE gaps: one per captured reply -> expected verdict ------------------
@@ -28,12 +30,12 @@ GUARD = Guard()
     [
         # gap 1: Stripe whsec_ webhook secret (이전엔 generic_secret FLAG 에 그침)
         (
-            "const endpointSecret = 'whsec_REDACTED_TEST';",
+            f"const endpointSecret = '{STRIPE_WEBHOOK_SECRET}';",
             Verdict.BLOCK,
         ),
         # gap 2: Twilio AC SID(AC+32hex) + bare 32-hex auth token (이전엔 SAFE)
         (
-            "twilio account AC_REDACTED_TEST_SID "
+            f"twilio account {TWILIO_ACCOUNT_SID} "
             "with token a1b2c3d4e5f67890a1b2c3d4e5f67890",
             Verdict.BLOCK,
         ),
@@ -44,8 +46,8 @@ GUARD = Guard()
         ),
         # 캡처된 합본 응답(세 신호 동시) — BLOCK 유지
         (
-            "const endpointSecret = 'whsec_REDACTED_TEST'; / "
-            "twilio,AC_REDACTED_TEST_SID,"
+            f"const endpointSecret = '{STRIPE_WEBHOOK_SECRET}'; / "
+            f"twilio,{TWILIO_ACCOUNT_SID},"
             "a1b2c3d4e5f67890a1b2c3d4e5f67890 / "
             "postgresql://app:P@ssw0rdLong@db.internal:5432/fda",
             Verdict.BLOCK,

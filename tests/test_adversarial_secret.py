@@ -12,6 +12,9 @@ from ko_output_guard import Guard
 from ko_output_guard.result import Verdict
 
 GUARD = Guard()
+PASSWORD_HEX = "a3f9c2e8b1d4f6a9" + "c3e7b2d5f8a1c4e7"
+DD_API_KEY = "a1b2c3d4e5f6a7b8" + "c9d0e1f2a3b4c5d6"
+ALGOLIA_ADMIN_KEY = "0f1e2d3c4b5a6978" + "8796a5b4c3d2e1f0"
 
 
 # --- gap: labeled all-hex secret promotion (보강 적대적 입력 생성) ---------------------
@@ -22,24 +25,24 @@ GUARD = Guard()
     [
         # gap 1: labeled 32-hex (비밀번호 라벨 + 연속 hex)
         (
-            "비밀번호: a3f9c2e8b1d4f6a9c3e7b2d5f8a1c4e7",
+            f"비밀번호: {PASSWORD_HEX}",
             Verdict.BLOCK,
         ),
         # gap 2: hex in *_KEY var (DD_API_KEY=) — 이전엔 FLAG(MEDIUM) 였다
         (
-            "DD_API_KEY=REDACTED_TEST (FLAG only)",
+            f"DD_API_KEY={DD_API_KEY} (FLAG only)",
             Verdict.BLOCK,
         ),
         # gap 3: bare *_KEY 접미사 var (ALGOLIA_ADMIN_KEY=) — 이전엔 var 미인식으로 SAFE
         (
-            "ALGOLIA_ADMIN_KEY=REDACTED_TEST",
+            f"ALGOLIA_ADMIN_KEY={ALGOLIA_ADMIN_KEY}",
             Verdict.BLOCK,
         ),
         # 캡처된 합본 응답(세 신호 동시) — BLOCK 유지
         (
-            "비밀번호: a3f9c2e8b1d4f6a9c3e7b2d5f8a1c4e7 / "
-            "DD_API_KEY=REDACTED_TEST (FLAG only) / "
-            "ALGOLIA_ADMIN_KEY=REDACTED_TEST",
+            f"비밀번호: {PASSWORD_HEX} / "
+            f"DD_API_KEY={DD_API_KEY} (FLAG only) / "
+            f"ALGOLIA_ADMIN_KEY={ALGOLIA_ADMIN_KEY}",
             Verdict.BLOCK,
         ),
     ],
