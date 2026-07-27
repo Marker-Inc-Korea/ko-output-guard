@@ -1,5 +1,9 @@
 # ko-output-guard
 
+[![CI](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml/badge.svg)](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-0b7285)](https://github.com/Marker-Inc-Korea/ko-output-guard/blob/main/pyproject.toml)
+[![Status: Beta](https://img.shields.io/badge/status-beta-c57b00)](./CHANGELOG.md)
+
 > 한국어 LLM **출력**을 검사하는 결정론 안전 가드 — **범용 콘텐츠 모더레이터 + 식약처 도메인 특화**. 크리덴셜·개인정보 누출, 성·폭력·혐오·불법행위 같은 범용 위해, 식약처 도메인 위험 권고, 자해·무기·유해·프롬프트 누출을 잡아 `SAFE`/`FLAG`/`BLOCK` 으로 판정한다.
 
 ## 무엇을 위한 도구인가

@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic secret-detector regression fixtures"
+paths = [
+    '''^tests/test_adversarial_secret\.py$''',
+    '''^tests/test_adversarial_secret_formats\.py$''',
+    '''^tests/test_output_guard\.py$''',
+]
