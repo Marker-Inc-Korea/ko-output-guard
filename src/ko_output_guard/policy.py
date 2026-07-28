@@ -5,13 +5,18 @@
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .result import Category, Severity
 
 
 class GuardPolicy(BaseModel):
     model_config = ConfigDict(frozen=True)
+
+    # Detector normalization and matching are proportional to input size.  Keep a
+    # bounded work budget and fail closed before any detector or Tier-2 runs.
+    max_text_chars: int = Field(default=100_000, ge=1)
+    max_context_chars: int = Field(default=100_000, ge=1)
 
     detect_secret: bool = True
     detect_pii: bool = True

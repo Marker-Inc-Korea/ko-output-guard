@@ -13,7 +13,16 @@ from __future__ import annotations
 from .detectors import PIIBackendUnavailable, pii_backend_available
 from .guard import Guard, check
 from .policy import GuardPolicy
-from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Violation
+from .result import (
+    Category,
+    GuardBlocked,
+    GuardResult,
+    SafeTelemetry,
+    SafeViolationTelemetry,
+    Severity,
+    Verdict,
+    Violation,
+)
 
 # Opt-in Tier-2 reviewer (ML-free at import; bge-m3 backend imported lazily).
 from .reviewers import (
@@ -32,9 +41,10 @@ from .reviewers import (
     make_openai_judge_generate,
 )
 
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 __all__ = [
     "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
+    "SafeTelemetry", "SafeViolationTelemetry",
     "Verdict", "Category", "Severity", "Violation",
     "PIIBackendUnavailable", "pii_backend_available",
     "EmbeddingTier2", "ClassifierTier2", "MultiLabelClassifierTier2",

@@ -4,11 +4,16 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-07-28
+
 ### Changed
 
 - 모노레포의 `ko-output-guard/` 이력을 보존해 독립 저장소로 전환했습니다.
-- 패키지 성숙도 표기를 실제 릴리스 증거에 맞춰 Beta로 조정했습니다.
+- 패키지 성숙도를 Production/Stable로 승격하고 독립 CI와 통합 릴리스 증거에 연결했습니다.
 - 독립 CI, 배포 경계, 보안 신고 및 기여 절차를 추가했습니다.
+- 출력·context 자원 상한을 detector 전에 적용하고 oversized 원문을 결과에서 제거했습니다.
+- `FLAG`, `BLOCK`, degraded 결과를 fail-closed 처리하는 `forward_safe`, `safe_text`,
+  `enforce()` 계약과 원문 없는 telemetry DTO를 추가했습니다.
 
 ### Removed
 

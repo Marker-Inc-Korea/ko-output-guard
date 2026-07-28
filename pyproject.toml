@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ko-output-guard"
-version = "0.2.0"
+version = "1.0.0"
 description = "Deterministic Korean LLM output safety guard — secret/PII leak, unsafe-advice (MFDS), toxicity, prompt-leak"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,13 +13,13 @@ license-files = ["LICENSE"]
 authors = [{ name = "Marker Inc Korea" }]
 keywords = ["korean", "llm", "output-guard", "safety", "pii", "secret", "guardrail", "mfds"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Natural Language :: Korean",
     "Programming Language :: Python :: 3",
     "Topic :: Security",
 ]
-dependencies = ["pydantic>=2.0"]
+dependencies = ["pydantic>=2.0,<3"]
 
 [project.urls]
 Homepage = "https://github.com/Marker-Inc-Korea/ko-output-guard"
@@ -28,11 +28,11 @@ Issues = "https://github.com/Marker-Inc-Korea/ko-output-guard/issues"
 Changelog = "https://github.com/Marker-Inc-Korea/ko-output-guard/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-pii = ["ko-pii>=1.15"]
-normalize = ["ko-prompt-guard>=0.1"]  # 난독 출력 정규화(없으면 경량 fallback)
+pii = ["ko-pii>=1.15,<2"]
+normalize = ["ko-prompt-guard>=1,<2"]  # 난독 출력 정규화(없으면 경량 fallback)
 # Opt-in Tier-2: EmbeddingTier2 기본 bge-m3 백엔드. 코어는 ML-free(인코더 주입 가능).
-embedding = ["torch>=2.0", "transformers>=4.40"]
-dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
+embedding = ["torch>=2.0,<3", "transformers>=4.40,<6"]
+dev = ["pytest>=8.0,<9", "ruff>=0.4,<1", "mypy>=1.10,<2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

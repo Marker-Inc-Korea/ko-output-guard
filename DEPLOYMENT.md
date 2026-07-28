@@ -22,8 +22,12 @@ python -m build --sdist --wheel
 ## Service Contract
 
 `POST /v1/check` 요청은 `{"text":"...", "context":"..."}` 형식이다. `context`는 선택 필드다.
-BLOCK 응답은 원문이 아니라 안전하게 마스킹된 `safe_payload`만 제공한다. 감사 로그에는
-request ID, 정책 digest, 판정, reason code, 지연과 원문 HMAC만 저장한다.
+서비스는 `GuardPolicy.max_text_chars`와 `max_context_chars`를 요청 경계에 설정해야 하며, 상한 초과는
+detector 실행 없이 `RESOURCE_LIMIT` BLOCK으로 처리한다. 응답의 `safe_payload`는 verdict와 무관하게
+`GuardResult.safe_text`만 사용한다. 따라서 FLAG/degraded 결과도 원문을 재방출하지 않는다. 직접 전달은
+`GuardResult.forward_safe`가 참인 결과만 허용하거나 `enforce()`를 사용하며, 후자는 FLAG/BLOCK/degraded에
+`GuardBlocked`를 발생시킨다. 감사 로그에는 `to_safe_telemetry()`의 code/category/severity와 request ID,
+정책 digest, 지연, 원문 HMAC만 저장하고 원문, matched substring, detector reason은 저장하지 않는다.
 
 `GET /health/ready`는 최소 상태만 반환한다. 인증된 `/v1/metadata` 또는 `--check` preflight가
 PII backend, 필수 detector, secret canary와 benign canary를 재현한다. `degraded=true`

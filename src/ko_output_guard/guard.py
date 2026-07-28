@@ -20,6 +20,7 @@ _ORIGINAL_OFFSET = frozenset({Category.SECRET_LEAK, Category.PII_LEAK})
 # 원본 offset 이 없는 BLOCK 카테고리는 span 마스킹을 시도하지 않는다.
 # 정규화본 offset 이거나 span 자체가 없으면 원문 재노출 위험이 있으므로 전체 placeholder.
 _BLOCK_PLACEHOLDER = "[BLOCKED: unsafe content removed]"
+_RESOURCE_LIMIT_PLACEHOLDER = "[BLOCKED: input exceeds configured resource limit]"
 
 
 def _redact(text: str, violations: tuple[Violation, ...]) -> str:
@@ -61,7 +62,12 @@ class Guard:
     def check(self, text: str, context: str | None = None) -> GuardResult:
         if not isinstance(text, str):
             raise TypeError(f"check() expects str, got {type(text).__name__}")
+        if context is not None and not isinstance(context, str):
+            raise TypeError(f"check() context expects str | None, got {type(context).__name__}")
         p = self.policy
+        resource = self._resource_limit_result(text, context)
+        if resource is not None:
+            return resource
         # SECRET/PII 는 형식 보존을 위해 원본에서, 한국어 detector 는 난독을 편 정규화본에서.
         norm = normalize_for_detection(text) if p.normalize else text
         violations: list[Violation] = []
@@ -165,10 +171,30 @@ class Guard:
             degraded=degraded,
         )
 
+    def _resource_limit_result(self, text: str, context: str | None) -> GuardResult | None:
+        if len(text) > self.policy.max_text_chars:
+            limit = "text"
+        elif context is not None and len(context) > self.policy.max_context_chars:
+            limit = "context"
+        else:
+            return None
+        return GuardResult(
+            verdict=Verdict.BLOCK,
+            # Do not retain an oversized untrusted input in the result object.
+            original_text=_RESOURCE_LIMIT_PLACEHOLDER,
+            redacted_text=_RESOURCE_LIMIT_PLACEHOLDER,
+            violations=(Violation(
+                code=f"resource_limit:{limit}",
+                category=Category.RESOURCE_LIMIT,
+                severity=Severity.CRITICAL,
+                reason=f"Configured {limit} character limit exceeded",
+            ),),
+        )
+
     def enforce(self, text: str, context: str | None = None) -> str:
-        """SAFE/FLAG 면 원본 반환, BLOCK 이면 GuardBlocked 발생(redacted 는 결과에)."""
+        """Return text only when it is SAFE and not degraded; otherwise raise."""
         r = self.check(text, context)
-        if r.verdict is Verdict.BLOCK:
+        if not r.forward_safe:
             raise GuardBlocked(r)
         return text
 

@@ -5,7 +5,7 @@ import importlib.util
 
 import pytest
 
-from ko_output_guard import Category, Guard, Verdict
+from ko_output_guard import Category, Guard, GuardBlocked, GuardPolicy, Verdict
 
 G = Guard()
 
@@ -330,6 +330,77 @@ def test_non_str_raises_typeerror() -> None:
     for bad in (None, 123, b"x", ["l"]):
         with pytest.raises(TypeError):
             G.check(bad)  # type: ignore[arg-type]
+
+
+def test_resource_limits_block_before_detectors_or_tier2() -> None:
+    called: list[str] = []
+    raw = "sensitive output that must not be retained"
+    g = Guard(
+        GuardPolicy(max_text_chars=8),
+        tier2={Category.TOXICITY: lambda value: bool(called.append(value))},
+    )
+
+    r = g.check(raw)
+
+    assert r.verdict is Verdict.BLOCK
+    assert r.original_text == "[BLOCKED: input exceeds configured resource limit]"
+    assert r.redacted_text == r.original_text
+    assert raw not in r.original_text
+    assert r.violations[0].code == "resource_limit:text"
+    assert called == []
+
+
+def test_context_resource_limit_blocks_before_detectors() -> None:
+    g = Guard(GuardPolicy(max_context_chars=4))
+
+    r = g.check("안전한 출력", context="too-long context")
+
+    assert r.verdict is Verdict.BLOCK
+    assert r.violations[0].code == "resource_limit:context"
+    assert r.safe_text == "[BLOCKED: input exceeds configured resource limit]"
+
+
+def test_enforce_only_returns_forward_safe_output() -> None:
+    safe_guard = Guard(GuardPolicy(detect_pii=False))
+    assert safe_guard.enforce("안녕하세요") == "안녕하세요"
+
+    with pytest.raises(GuardBlocked) as flagged:
+        safe_guard.enforce("아 씨발 진짜 짜증나")
+    assert flagged.value.result.verdict is Verdict.FLAG
+    assert flagged.value.result.safe_text == "[BLOCKED: output requires review]"
+
+    with pytest.raises(GuardBlocked) as blocked:
+        safe_guard.enforce(f"키는 {OPENAI_SECRET} 입니다")
+    assert blocked.value.result.verdict is Verdict.BLOCK
+
+
+def test_degraded_safe_result_is_not_forward_safe(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ko_output_guard import detectors
+
+    monkeypatch.setattr(detectors, "pii_backend_available", lambda: False)
+    g = Guard()
+    r = g.check("안녕하세요")
+
+    assert r.verdict is Verdict.SAFE
+    assert r.degraded is True
+    assert r.is_safe is False
+    assert r.forward_safe is False
+    assert r.safe_text == "[BLOCKED: output requires review]"
+    with pytest.raises(GuardBlocked):
+        g.enforce("안녕하세요")
+
+
+def test_safe_telemetry_excludes_source_text_and_matches() -> None:
+    raw = f"키는 {OPENAI_SECRET} 입니다"
+    r = Guard(GuardPolicy(detect_pii=False)).check(raw)
+    telemetry = r.to_safe_telemetry().model_dump()
+
+    assert telemetry["forward_safe"] is False
+    assert telemetry["violations"]
+    assert "original_text" not in telemetry
+    assert "matched" not in telemetry["violations"][0]
+    assert "reason" not in telemetry["violations"][0]
+    assert OPENAI_SECRET not in str(telemetry)
 
 
 # 난독 출력 정규화 — fallback(ko-prompt-guard 미설치)에서도 보장되는 케이스만.

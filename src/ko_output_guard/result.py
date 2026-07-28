@@ -17,6 +17,7 @@ class Verdict(str, Enum):
 
 
 class Category(str, Enum):
+    RESOURCE_LIMIT = "resource_limit"  # configured text/context work budget exceeded
     SECRET_LEAK = "secret_leak"      # API key/토큰/private key 등 크리덴셜
     PII_LEAK = "pii_leak"            # 개인정보 재누출(ko-pii 연동)
     UNSAFE_ADVICE = "unsafe_advice"  # 식약처 도메인 위험 권고
@@ -61,6 +62,27 @@ class Violation(BaseModel):
     ambiguous: bool = False
 
 
+class SafeViolationTelemetry(BaseModel):
+    """A violation summary that cannot carry source text or detector matches."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    category: Category
+    severity: Severity
+
+
+class SafeTelemetry(BaseModel):
+    """Safe-to-log decision data with no original output, match, or reason fields."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verdict: Verdict
+    forward_safe: bool
+    degraded: bool
+    violations: tuple[SafeViolationTelemetry, ...] = ()
+
+
 class GuardResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -75,13 +97,44 @@ class GuardResult(BaseModel):
 
     @property
     def is_safe(self) -> bool:
-        return self.verdict is Verdict.SAFE
+        return self.forward_safe
+
+    @property
+    def forward_safe(self) -> bool:
+        """Whether the original text is safe to forward to an end user."""
+        return self.verdict is Verdict.SAFE and not self.degraded
+
+    @property
+    def safe_text(self) -> str:
+        """The only output text safe to forward for this decision."""
+        if self.forward_safe:
+            return self.original_text
+        if self.redacted_text is not None:
+            return self.redacted_text
+        return "[BLOCKED: output requires review]"
+
+    def to_safe_telemetry(self) -> SafeTelemetry:
+        """Return a log-safe DTO that intentionally excludes source text and matches."""
+        return SafeTelemetry(
+            verdict=self.verdict,
+            forward_safe=self.forward_safe,
+            degraded=self.degraded,
+            violations=tuple(
+                SafeViolationTelemetry(
+                    code=violation.code,
+                    category=violation.category,
+                    severity=violation.severity,
+                )
+                for violation in self.violations
+            ),
+        )
 
 
 class GuardBlocked(Exception):
-    """enforce() 가 BLOCK 출력에 대해 발생시키는 예외."""
+    """enforce() 가 forward-safe 하지 않은 출력에 대해 발생시키는 예외."""
 
     def __init__(self, result: GuardResult) -> None:
         self.result = result
         cats = ", ".join(sorted({v.category.value for v in result.violations}))
-        super().__init__(f"output blocked: {cats}")
+        detail = cats or "degraded guard result"
+        super().__init__(f"output blocked: {detail}")

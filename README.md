@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml/badge.svg)](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-0b7285)](https://github.com/Marker-Inc-Korea/ko-output-guard/blob/main/pyproject.toml)
-[![Status: Beta](https://img.shields.io/badge/status-beta-c57b00)](./CHANGELOG.md)
+[![Status: Production/Stable](https://img.shields.io/badge/status-production%2Fstable-1f6f43)](./CHANGELOG.md)
 
 > 한국어 LLM **출력**을 검사하는 결정론 안전 가드 — **범용 콘텐츠 모더레이터 + 식약처 도메인 특화**. 크리덴셜·개인정보 누출, 성·폭력·혐오·불법행위 같은 범용 위해, 식약처 도메인 위험 권고, 자해·무기·유해·프롬프트 누출을 잡아 `SAFE`/`FLAG`/`BLOCK` 으로 판정한다.
 
@@ -32,7 +32,7 @@ LLM이 **내놓은** 텍스트를 그대로 사용자에게 보내기 전에 한
 | **한국어 특화** | 초성·자모분해·전각·제로폭·한글-숫자 음차(`구공일`→`901`)·골뱅이/쩜 이메일 등 한국어 난독 복원 |
 | **결정론 (ML 없음)** | 전부 정규식 룰 + 사전(식약처 DUR) + 체크섬·근접 윈도. 네트워크·LLM 호출 없음 → 재현 가능 |
 | **식약처 도메인 (옵션 특화)** | DUR 공식 데이터로 병용금기·임부금기·연령금기 보강 (`data/dur.json`). **범용/특화 토글**: `GuardPolicy(detect_unsafe_advice=False)` 면 범용 코어(도메인 안전 off), 기본·식약처 납품은 on — 통합 하네스 `KoGuardHarness(mfds=...)` 참고 |
-| **fail-closed** | 위해 카테고리 BLOCK 시 원문 대신 차단 placeholder 반환(재노출 방지). ko-pii 부재 시 조용히 통과 않고 `degraded` 표시 / `strict` 면 예외 |
+| **fail-closed** | 위해 카테고리·자원 상한 초과 시 원문 대신 차단 placeholder 반환. `enforce()`는 `SAFE`이면서 `degraded=False`일 때만 원문을 반환하며, 나머지는 예외다 |
 | **과탐 방지** | "마시지 마세요"·"위험합니다" 같은 안전 경고는 금지·만류 *구조*로 인식해 제외(negation-aware) |
 
 ## 구현된 것
@@ -68,7 +68,8 @@ LLM이 **내놓은** 텍스트를 그대로 사용자에게 보내기 전에 한
 ## 동작 방식
 
 ```
-text(+context) → 정규화(normalize_for_detection)
+text(+context) → 정책 문자 수 상한 검사 (초과 시 detector 실행 없이 BLOCK)
+              → 정규화(normalize_for_detection)
               → 11개 검출기 실행 (SECRET/PII 는 형식 보존 위해 원본, 나머지는 정규화본)
               → 정책으로 위반 집계 (block_categories × min_block_severity)
               → 판정
@@ -78,12 +79,14 @@ text(+context) → 정규화(normalize_for_detection)
 
 | 라벨 | 의미 |
 |---|---|
-| `SAFE` | 위반 없음 — 내보내도 안전 |
+| `SAFE` | 위반 없음 — `degraded=False`일 때만 원문을 내보내도 안전 |
 | `FLAG` | 위반은 있으나 BLOCK 기준 미만 — 사람 검토/로깅 권고 |
 | `BLOCK` | BLOCK 카테고리 × `HIGH`+ 심각도 위반 — 내보내기 차단 (`redacted_text` 제공) |
 
 기본 정책(`GuardPolicy`): `SECRET_LEAK`·`PII_LEAK`·`UNSAFE_ADVICE`·`SELF_HARM`·`WEAPONS`·`PROMPT_LEAK`·`SEXUAL`·`HATE`·`ILLEGAL` 는 `HIGH`+ 면 BLOCK, `TOXICITY`·`VIOLENCE` 와 약한 신호는 FLAG(사람 검토). 범주별 BLOCK/FLAG 는 `GuardPolicy(block_categories=…)` 로 조정한다.
-BLOCK 시 — SECRET/PII 는 `[REDACTED]` 구간 마스킹(형식 보존), 위해 카테고리는 전체를 `[BLOCKED: unsafe content removed]` 로 대체.
+`GuardPolicy(max_text_chars=..., max_context_chars=...)`는 detector와 Tier-2 실행 전 적용할 문자 수 상한이다. 초과하면 `RESOURCE_LIMIT` BLOCK으로 판정하고, 결과의 `original_text`와 `redacted_text` 모두 `[BLOCKED: input exceeds configured resource limit]`로 대체한다.
+
+`GuardResult.forward_safe`는 원문을 전달해도 되는지 명시한다(`SAFE`이며 `degraded=False`일 때만 `True`). 운영 출력에는 항상 `GuardResult.safe_text`를 사용한다. SAFE 결과는 원문이고, FLAG/degraded 결과는 `[BLOCKED: output requires review]`, BLOCK 결과는 안전 redaction 또는 placeholder다. 감사 이벤트에는 `r.to_safe_telemetry()`를 사용한다. 이 DTO는 원문, detector `matched`, reason을 포함하지 않는다.
 
 ## 사용 예시
 
@@ -93,13 +96,10 @@ from ko_output_guard import Guard, Verdict
 g = Guard()
 r = g.check(llm_output, context=system_prompt)   # context 는 선택(프롬프트 echo 탐지용)
 
-if r.verdict is Verdict.BLOCK:
-    safe_text = r.redacted_text     # 위반 마스킹된 안전 출력
-else:
-    safe_text = llm_output
+safe_text = r.safe_text             # FLAG/degraded도 원문을 재방출하지 않음
 
 # 또는 예외 방식
-text = g.enforce(llm_output)        # BLOCK 이면 GuardBlocked 발생
+text = g.enforce(llm_output)        # FLAG/BLOCK/degraded면 GuardBlocked 발생
 ```
 
 공개 API(`from ko_output_guard import ...`): `Guard`, `check`, `GuardPolicy`, `GuardResult`,
