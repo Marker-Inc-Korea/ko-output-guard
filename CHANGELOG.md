@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+### Documentation
+
+- 출력 가드를 DLP, Content Safety, MFDS Safety policy pack으로 분리하고 pack별 보장 범위,
+  Tier-2 필요 조건과 규제·임상 비보장 범위를 명확히 했습니다.
+
 ## 1.0.0 - 2026-07-28
 
 ### Changed

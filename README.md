@@ -2,9 +2,23 @@
 
 [![CI](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml/badge.svg)](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-0b7285)](https://github.com/Marker-Inc-Korea/ko-output-guard/blob/main/pyproject.toml)
-[![Status: Production/Stable](https://img.shields.io/badge/status-production%2Fstable-1f6f43)](./CHANGELOG.md)
+[![Software: Stable](https://img.shields.io/badge/software-stable-1f6f43)](./CHANGELOG.md)
 
-> 한국어 LLM **출력**을 검사하는 결정론 안전 가드 — **범용 콘텐츠 모더레이터 + 식약처 도메인 특화**. 크리덴셜·개인정보 누출, 성·폭력·혐오·불법행위 같은 범용 위해, 식약처 도메인 위험 권고, 자해·무기·유해·프롬프트 누출을 잡아 `SAFE`/`FLAG`/`BLOCK` 으로 판정한다.
+> 한국어 LLM **출력**을 검사하는 정책 엔진. DLP, 콘텐츠 안전, MFDS 안전을 서로 다른
+> policy pack으로 운영하며 각 pack의 증거 수준을 분리한다.
+
+## 제품 계약
+
+| Policy pack | 운영 역할 | 단독 보장하지 않는 것 | 권장 운영 |
+|---|---|---|---|
+| **DLP** | secret·PII·시스템 프롬프트 echo 차단 | 모든 비정형·의미형 누출 탐지 | 필수 backend와 canary 통과 후 hard block |
+| **Content Safety** | 성·폭력·혐오·불법·자해·무기·욕설 신호 | 한국어 의미·암시·완곡 표현 전체 coverage | Tier-1은 고신뢰 신호, 포괄적 coverage에는 검증된 Tier-2 필요 |
+| **MFDS Safety** | 약물·식품 위험 권고와 DUR 정책 screen | 의학적 정답, 임상 타당성, 식약처 허가 | 정보성 RAG의 보조 통제와 escalation에 사용 |
+
+`Software: Stable`은 패키지와 실패 처리의 안정성을 뜻한다. 세 pack을 하나의 정확도나
+하나의 “안전” 주장으로 묶지 않는다. 고객은 활성 pack, 카테고리별 BLOCK/FLAG, Tier-2
+revision과 장애 동작을 별도로 승인해야 한다. 의미형 pack을 Tier-1만으로 운영할 때는
+포괄적 모더레이션 제품이 아니라 **고정밀 규칙 screen**으로 표현한다.
 
 ## 무엇을 위한 도구인가
 
