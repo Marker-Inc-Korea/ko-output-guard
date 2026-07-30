@@ -2,7 +2,12 @@
 
 [![CI](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml/badge.svg)](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-0b7285)](https://github.com/Marker-Inc-Korea/ko-output-guard/blob/main/pyproject.toml)
-[![Software: Stable](https://img.shields.io/badge/software-stable-1f6f43)](./CHANGELOG.md)
+[![Status: Development Preview](https://img.shields.io/badge/status-development_preview-d97706)](./CHANGELOG.md)
+
+> [!IMPORTANT]
+> **공개 단계: Development Preview.** 소스, API와 회귀 테스트는 공개되어 있지만 policy
+> pack별 증거 수준이 다르고 의미 기반 coverage는 계속 검증 중입니다. 평가·통합과
+> 다층 방어 구성요소로 사용하며, 단독 범용 모더레이션 또는 규제 적합성 통제로 간주하지 마세요.
 
 > 한국어 LLM **출력**을 검사하는 정책 엔진. DLP, 콘텐츠 안전, MFDS 안전을 서로 다른
 > policy pack으로 운영하며 각 pack의 증거 수준을 분리한다.
@@ -15,10 +20,10 @@
 | **Content Safety** | 성·폭력·혐오·불법·자해·무기·욕설 신호 | 한국어 의미·암시·완곡 표현 전체 coverage | Tier-1은 고신뢰 신호, 포괄적 coverage에는 검증된 Tier-2 필요 |
 | **MFDS Safety** | 약물·식품 위험 권고와 DUR 정책 screen | 의학적 정답, 임상 타당성, 식약처 허가 | 정보성 RAG의 보조 통제와 escalation에 사용 |
 
-`Software: Stable`은 패키지와 실패 처리의 안정성을 뜻한다. 세 pack을 하나의 정확도나
-하나의 “안전” 주장으로 묶지 않는다. 고객은 활성 pack, 카테고리별 BLOCK/FLAG, Tier-2
-revision과 장애 동작을 별도로 승인해야 한다. 의미형 pack을 Tier-1만으로 운영할 때는
-포괄적 모더레이션 제품이 아니라 **고정밀 규칙 screen**으로 표현한다.
+`Development Preview`는 공개 개발·검증 단계라는 뜻이다. 세 pack을 하나의 정확도나 하나의
+“안전” 주장으로 묶지 않는다. 고객은 활성 pack, 카테고리별 BLOCK/FLAG, Tier-2 revision과
+장애 동작을 별도로 승인해야 한다. 의미형 pack을 Tier-1만으로 운영할 때는 포괄적
+모더레이션 제품이 아니라 **고정밀 규칙 screen**으로 표현한다.
 
 ## 무엇을 위한 도구인가
 
@@ -506,11 +511,12 @@ HATE 전용 제3자 셋(번역 없음):
 
 ---
 
-## 운영 배포
+## 통합·배포 검증
 
 PII backend 강제, 인증·요청 상한·정책 digest·raw 비저장 감사·readiness canary와 비루트
 컨테이너 사용법은 [`DEPLOYMENT.md`](./DEPLOYMENT.md)에 정리했다. 선택 ML/LLM reviewer는
-별도 GPU endpoint와 검증 증거 없이는 서비스 readiness를 통과하지 않는다.
+별도 GPU endpoint와 검증 증거 없이는 서비스 readiness를 통과하지 않는다. 이 절차는 Preview
+구성요소의 검증 방법이며 일반 운영 적합성을 보증하지 않는다.
 
 ---
 

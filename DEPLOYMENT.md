@@ -1,5 +1,8 @@
 # ko-output-guard Deployment
 
+`ko-output-guard`는 현재 **Development Preview**다. 아래 계약은 평가 환경과 배포 후보에서
+재현 가능하게 검증하기 위한 기준이며, 고객 환경의 pack별 효과나 단독 운영 적합성을 보증하지 않는다.
+
 이 저장소는 `ko-output-guard` 패키지, 공개 정책 API와 제품 테스트의 canonical source다. 인증,
 감사, 공통 정책 로더와 컨테이너 hardening을 포함한 HTTP 서비스 조립은
 [`modak_experiments/deployment`](https://github.com/Marker-Inc-Korea/modak_experiments/tree/main/deployment)
