@@ -32,7 +32,7 @@ pii = ["ko-pii>=1.15,<2"]
 normalize = ["ko-prompt-guard>=1,<2"]  # 난독 출력 정규화(없으면 경량 fallback)
 # Opt-in Tier-2: EmbeddingTier2 기본 bge-m3 백엔드. 코어는 ML-free(인코더 주입 가능).
 embedding = ["torch>=2.0,<3", "transformers>=4.40,<6"]
-dev = ["pytest>=8.0,<9", "ruff>=0.4,<1", "mypy>=1.10,<2"]
+dev = ["pytest>=8.0,<9", "ruff>=0.4,<1", "mypy>=1.10,<3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
