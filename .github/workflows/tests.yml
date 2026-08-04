@@ -32,7 +32,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install "ko-pii @ git+https://github.com/Marker-Inc-Korea/ko-pii.git@127f012a475bd013ba3301f470055b15d4b80ac4"
-          python -m pip install "ko-prompt-guard @ git+https://github.com/Marker-Inc-Korea/ko-prompt-guard.git@28037fc7feb94985d2a095d285185b5544cf523f"
+          python -m pip install "ko-prompt-guard @ git+https://github.com/Marker-Inc-Korea/ko-prompt-guard.git@cd72b21ad9c282fbd3d50723824575bb5090610b"
       - name: Install
         run: python -m pip install ".[dev]"
       - name: Test
@@ -52,7 +52,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install "ko-pii @ git+https://github.com/Marker-Inc-Korea/ko-pii.git@127f012a475bd013ba3301f470055b15d4b80ac4"
-          python -m pip install "ko-prompt-guard @ git+https://github.com/Marker-Inc-Korea/ko-prompt-guard.git@28037fc7feb94985d2a095d285185b5544cf523f"
+          python -m pip install "ko-prompt-guard @ git+https://github.com/Marker-Inc-Korea/ko-prompt-guard.git@cd72b21ad9c282fbd3d50723824575bb5090610b"
           python -m pip install ".[dev]" "build==1.5.0"
       - name: Static analysis
         run: |
