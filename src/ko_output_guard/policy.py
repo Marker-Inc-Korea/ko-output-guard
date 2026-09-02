@@ -5,9 +5,21 @@
 """
 from __future__ import annotations
 
+from enum import Enum
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from .result import Category, Severity
+
+
+class PolicyPack(str, Enum):
+    """Auditable detector presets for distinct output-control jobs."""
+
+    DEFAULT = "default"
+    DLP = "dlp"
+    CONTENT_SAFETY = "content_safety"
+    MFDS = "mfds"
 
 
 class GuardPolicy(BaseModel):
@@ -17,6 +29,8 @@ class GuardPolicy(BaseModel):
     # bounded work budget and fail closed before any detector or Tier-2 runs.
     max_text_chars: int = Field(default=100_000, ge=1)
     max_context_chars: int = Field(default=100_000, ge=1)
+    max_structure_depth: int = Field(default=16, ge=1, le=128)
+    max_structure_nodes: int = Field(default=10_000, ge=1)
 
     detect_secret: bool = True
     detect_pii: bool = True
@@ -70,3 +84,65 @@ class GuardPolicy(BaseModel):
         # VIOLENCE 는 block_categories 미포함 → FLAG(검토). 정책으로 추가 가능.
     })
     min_block_severity: Severity = Severity.HIGH
+
+    @classmethod
+    def for_pack(cls, pack: PolicyPack | str, **overrides: Any) -> GuardPolicy:
+        """Create an explicit policy preset, with caller overrides applied last."""
+        selected = PolicyPack(pack)
+        detector_fields = {
+            "detect_secret",
+            "detect_pii",
+            "detect_unsafe_advice",
+            "detect_self_harm",
+            "detect_weapons",
+            "detect_toxicity",
+            "detect_prompt_leak",
+            "detect_sexual",
+            "detect_violence",
+            "detect_hate",
+            "detect_illegal",
+            "detect_data_exfil",
+        }
+        values: dict[str, Any] = {}
+        if selected is not PolicyPack.DEFAULT:
+            values.update({name: False for name in detector_fields})
+        if selected is PolicyPack.DLP:
+            values.update(
+                detect_secret=True,
+                detect_pii=True,
+                detect_prompt_leak=True,
+                detect_data_exfil=True,
+            )
+        elif selected is PolicyPack.CONTENT_SAFETY:
+            values.update(
+                detect_unsafe_advice=True,
+                detect_self_harm=True,
+                detect_weapons=True,
+                detect_toxicity=True,
+                detect_sexual=True,
+                detect_violence=True,
+                detect_hate=True,
+                detect_illegal=True,
+            )
+        elif selected is PolicyPack.MFDS:
+            values.update(
+                detect_secret=True,
+                detect_pii=True,
+                detect_unsafe_advice=True,
+                detect_prompt_leak=True,
+                detect_data_exfil=True,
+            )
+        values.update(overrides)
+        return cls(**values)
+
+    @classmethod
+    def dlp(cls, **overrides: Any) -> GuardPolicy:
+        return cls.for_pack(PolicyPack.DLP, **overrides)
+
+    @classmethod
+    def content_safety(cls, **overrides: Any) -> GuardPolicy:
+        return cls.for_pack(PolicyPack.CONTENT_SAFETY, **overrides)
+
+    @classmethod
+    def mfds(cls, **overrides: Any) -> GuardPolicy:
+        return cls.for_pack(PolicyPack.MFDS, **overrides)

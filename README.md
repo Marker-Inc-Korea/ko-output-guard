@@ -1,3 +1,5 @@
+[English](README.en.md) | **한국어**
+
 # ko-output-guard
 
 [![CI](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml/badge.svg)](https://github.com/Marker-Inc-Korea/ko-output-guard/actions/workflows/tests.yml)
@@ -24,6 +26,32 @@
 “안전” 주장으로 묶지 않는다. 고객은 활성 pack, 카테고리별 BLOCK/FLAG, Tier-2 revision과
 장애 동작을 별도로 승인해야 한다. 의미형 pack을 Tier-1만으로 운영할 때는 포괄적
 모더레이션 제품이 아니라 **고정밀 규칙 screen**으로 표현한다.
+
+정책 pack, 구조화 출력과 chunk 입력은 실제 API로 분리되어 있습니다.
+
+```python
+from ko_output_guard import Guard, GuardPolicy, OutputStreamSession
+
+guard = Guard(GuardPolicy.dlp())
+tool_result = guard.check_structured({"arguments": {"body": model_output}})
+if not tool_result.forward_safe:
+    raise RuntimeError(tool_result.to_safe_telemetry())
+safe_arguments = tool_result.safe_value  # 통과한 경우에만 tool로 전달
+
+stream = OutputStreamSession(guard)
+stream.feed("응답 첫 조각")
+stream.feed("응답 마지막 조각")
+decision = stream.finalize()  # 이 전에는 원문을 사용자에게 보내지 않음
+safe_text = decision.safe_text
+```
+
+구조화 입력의 문자열 값과 key를 모두 검사합니다. 기본 safe telemetry에는 입력 key 기반
+경로를 넣지 않으며 finding 순번과 깊이만 남깁니다. 로컬 원문 경로가 꼭 필요할 때만
+결과 객체의 `findings` 또는 CLI `--include-text`를 명시적으로 사용합니다.
+
+```bash
+printf '모델 출력' | ko-output-guard check - --pack dlp
+```
 
 ## 무엇을 위한 도구인가
 
@@ -121,14 +149,15 @@ safe_text = r.safe_text             # FLAG/degraded도 원문을 재방출하지
 text = g.enforce(llm_output)        # FLAG/BLOCK/degraded면 GuardBlocked 발생
 ```
 
-공개 API(`from ko_output_guard import ...`): `Guard`, `check`, `GuardPolicy`, `GuardResult`,
-`GuardBlocked`, `Verdict`, `Category`, `Severity`, `Violation`, `PIIBackendUnavailable`, `pii_backend_available`.
+공개 API(`from ko_output_guard import ...`): `Guard`, `check`, `check_structured`, `GuardPolicy`,
+`PolicyPack`, `OutputStreamSession`, `GuardResult`, `GuardBlocked`, `Verdict`, `Category`,
+`Severity`, `Violation`, `PIIBackendUnavailable`, `pii_backend_available`.
 opt-in Tier-2: `EmbeddingTier2`, `ClassifierTier2`, `MultiLabelClassifierTier2`, `LLMJudgeTier2`,
 `make_hate_tier2`, `make_llm_judge`, `make_bge_encoder`, `default_hate_anchors`, `JUDGE_PROMPTS`.
 
 ## 검증
 
-로컬 pytest **795개 전부 통과**(`pytest -q`).
+로컬 pytest **831개 통과, 2개 선택 의존성 스킵**(`pytest -q`, `ko-pii`·`ko-prompt-guard` 연동 포함).
 카테고리별 동작·과탐 방지·견고성(ReDoS 상한) + **적대적 입력 회귀 테스트 포함**
 (`tests/test_adversarial_*.py` **13개** — 캡처한 실제 누출 응답을 입력으로 고정, 각 위험 케이스는 BLOCK·benign look-alike 는 SAFE 로 양방향 검증. PII 누출 포맷(IBAN/MAC/GPS/카드만료·CVV)·secret 형식·욕설 난독(모음늘임/음역/자모-leet)·translate-frame 위험권고 우회 포함).
 범용 4범주(SEXUAL/VIOLENCE/HATE/ILLEGAL)는 `tests/test_general_moderation.py` 에서 명시적 위반 BLOCK/FLAG·인접 benign(의학·뉴스·인용·인권옹호·예방) 무탐을 양방향 고정한다.
@@ -147,7 +176,7 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 | **워밍업 후 지연(중앙값)** | **약 0.98 ms** | 짧은 정상/악성 입력 교대 300회, 워밍업 50회 후 |
 | **워밍업 후 지연(p95)** | **약 1.1–1.3 ms** | 위와 동일 (300회 표본) |
 | **처리량** | **약 1,000 calls/sec** (단일 스레드) | 워밍업 중앙값 역수 |
-| **전체 테스트** | **795 passed** (2 skipped) | `pytest` 전체 스위트 |
+| **전체 테스트** | **831 passed, 2 skipped** | `pytest` 전체 스위트와 선택 guard backend 연동 |
 
 > 콜드 스타트(첫 호출)는 1회성 초기화 비용이며 이후 호출과 **분리해서** 봐야 한다. 위 콜드 수치는 본 측정 환경 기준이고, 캐시가 완전히 식은 느린 머신에서는 더 길어질 수 있다(최대 30–60초). 워밍업 후 정상 처리 지연은 1 ms 안팎으로 일정하다.
 
@@ -201,10 +230,11 @@ x86-64 CPU · 단일 스레드 · Python 3.12 기준 실측. 결정론 룰엔진
 ## 설치
 
 ```bash
-pip install ko-output-guard
-# 또는 소스에서
-pip install -e .
+python3 -m pip install \
+  "ko-output-guard @ git+https://github.com/Marker-Inc-Korea/ko-output-guard.git@main"
 ```
+
+PyPI 배포 전까지는 위 Git 설치가 공개 설치 정본입니다.
 
 의존성(`pyproject.toml`):
 

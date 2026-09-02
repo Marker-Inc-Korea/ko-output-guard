@@ -11,8 +11,8 @@
 from __future__ import annotations
 
 from .detectors import PIIBackendUnavailable, pii_backend_available
-from .guard import Guard, check
-from .policy import GuardPolicy
+from .guard import Guard, check, check_structured
+from .policy import GuardPolicy, PolicyPack
 from .result import (
     Category,
     GuardBlocked,
@@ -20,6 +20,9 @@ from .result import (
     SafeTelemetry,
     SafeViolationTelemetry,
     Severity,
+    StructuredFinding,
+    StructuredGuardResult,
+    StructuredSafeTelemetry,
     Verdict,
     Violation,
 )
@@ -40,11 +43,21 @@ from .reviewers import (
     make_llm_judge,
     make_openai_judge_generate,
 )
+from .session import (
+    OutputStreamClosed,
+    OutputStreamLimitExceeded,
+    OutputStreamSession,
+    OutputStreamStatus,
+)
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
-    "Guard", "check", "GuardPolicy", "GuardResult", "GuardBlocked",
+    "Guard", "check", "check_structured", "GuardPolicy", "PolicyPack",
+    "GuardResult", "GuardBlocked",
     "SafeTelemetry", "SafeViolationTelemetry",
+    "StructuredFinding", "StructuredGuardResult", "StructuredSafeTelemetry",
+    "OutputStreamClosed", "OutputStreamLimitExceeded",
+    "OutputStreamSession", "OutputStreamStatus",
     "Verdict", "Category", "Severity", "Violation",
     "PIIBackendUnavailable", "pii_backend_available",
     "EmbeddingTier2", "ClassifierTier2", "MultiLabelClassifierTier2",

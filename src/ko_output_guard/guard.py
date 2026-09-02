@@ -7,11 +7,15 @@ detector 를 돌리고 GuardResult 를 반환한다. 네트워크·LLM 호출이
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from . import detectors
 from .normalize import normalize_for_detection
 from .policy import GuardPolicy
 from .result import Category, GuardBlocked, GuardResult, Severity, Verdict, Violation
+
+if TYPE_CHECKING:
+    from .result import StructuredGuardResult
 
 # 원본 텍스트 기준 offset 을 갖는(=정규화 안 거친) 카테고리만 redact 대상.
 # toxicity/unsafe/prompt-leak 은 정규화본 offset 이라 원본에 적용하면 어긋난다.
@@ -198,7 +202,26 @@ class Guard:
             raise GuardBlocked(r)
         return text
 
+    def check_structured(
+        self,
+        value: object,
+        context: str | None = None,
+    ) -> StructuredGuardResult:
+        """Inspect all string leaves in JSON-like output or tool arguments."""
+        from .structured import check_structured_value
+
+        return check_structured_value(self, value, context=context)
+
 
 def check(text: str, context: str | None = None, policy: GuardPolicy | None = None) -> GuardResult:
     """모듈 레벨 편의 함수 — Guard(policy).check(text, context)."""
     return Guard(policy).check(text, context)
+
+
+def check_structured(
+    value: object,
+    context: str | None = None,
+    policy: GuardPolicy | None = None,
+) -> StructuredGuardResult:
+    """Module-level wrapper for ``Guard(policy).check_structured``."""
+    return Guard(policy).check_structured(value, context)

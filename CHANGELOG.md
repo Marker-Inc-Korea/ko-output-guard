@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+## 1.1.0 - 2026-09-02
+
+### Added
+
+- DLP, 콘텐츠 안전, 식약처 출력 통제를 분리해 선택할 수 있는 실제 `PolicyPack` preset을
+  추가했습니다.
+- JSON 응답과 tool-call 인자의 모든 문자열 값·키를 경로별로 검사하고 안전한 사본을 만드는
+  `check_structured()`를 추가했습니다.
+- 기본 구조화 telemetry는 입력 키를 노출하지 않고 finding 순번과 경로 깊이만 기록합니다.
+- chunk 경계에서 나뉜 크리덴셜·PII를 선전송하지 않는 bounded `OutputStreamSession`과,
+  원문을 기본 출력하지 않는 `ko-output-guard` CLI를 추가했습니다.
+
 ### Documentation
 
 - 공개 단계를 `Development Preview`로 재분류하고 PyPI maturity를 Beta로 맞췄습니다.

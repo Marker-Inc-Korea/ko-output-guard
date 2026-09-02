@@ -6,6 +6,7 @@ ko-prompt-guard 와 동일한 모양(결정론·pydantic·frozen)을 따른다. 
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -126,6 +127,72 @@ class GuardResult(BaseModel):
                     severity=violation.severity,
                 )
                 for violation in self.violations
+            ),
+        )
+
+
+class StructuredFinding(BaseModel):
+    """One unsafe or degraded string leaf and its JSON-pointer path."""
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    result: GuardResult
+
+
+class StructuredFindingTelemetry(BaseModel):
+    """Content-free finding metadata for logs and metrics."""
+
+    model_config = ConfigDict(frozen=True)
+
+    finding_index: int
+    path_depth: int
+    decision: SafeTelemetry
+
+
+class StructuredSafeTelemetry(BaseModel):
+    """Content-free decision for a structured output."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verdict: Verdict
+    forward_safe: bool
+    degraded: bool
+    scanned_strings: int
+    failure_code: str | None = None
+    findings: tuple[StructuredFindingTelemetry, ...] = ()
+
+
+class StructuredGuardResult(BaseModel):
+    """Aggregate decision and a shape-preserving, guarded copy of JSON-like data."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verdict: Verdict
+    safe_value: Any
+    findings: tuple[StructuredFinding, ...] = ()
+    scanned_strings: int = 0
+    degraded: bool = False
+    failure_code: str | None = None
+
+    @property
+    def forward_safe(self) -> bool:
+        return self.verdict is Verdict.SAFE and not self.degraded and self.failure_code is None
+
+    def to_safe_telemetry(self) -> StructuredSafeTelemetry:
+        return StructuredSafeTelemetry(
+            verdict=self.verdict,
+            forward_safe=self.forward_safe,
+            degraded=self.degraded,
+            scanned_strings=self.scanned_strings,
+            failure_code=self.failure_code,
+            findings=tuple(
+                StructuredFindingTelemetry(
+                    finding_index=index,
+                    path_depth=(0 if finding.path == "/" else finding.path.count("/")),
+                    decision=finding.result.to_safe_telemetry(),
+                )
+                for index, finding in enumerate(self.findings)
             ),
         )
 
